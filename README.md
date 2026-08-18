@@ -52,7 +52,10 @@ src/
 ├── VelaShell.Market.Domain/          插件 / 版本 / 评价 / 扫描报告与状态机
 ├── VelaShell.Market.Infrastructure/  Mongo 上下文与索引、S3 存储、ClamAV、检测流水线
 ├── VelaShell.Market.Api/             HTTP API(最小 API)、OIDC 资源服务器、Markdown 渲染
-└── VelaShell.Market.Web/             前端骨架(React + Umi + antd)
+└── VelaShell.Market.Web/             前端(React + Umi + antd)
+    ├── layouts/                   全站骨架:顶栏、主题令牌、Markdown 排版
+    ├── components/                评价区、检测报告
+    └── pages/                     浏览 / 详情 / 发布 / 我的上传 / 我的插件 / 审核台
 tests/VelaShell.Market.Tests/         静态检测器的地面真值用例
 build/                                Dockerfile 与 SDK 同步脚本
 docs/                                 架构、安全流水线、身份对接
@@ -73,4 +76,5 @@ docs/                                 架构、安全流水线、身份对接
 
 - [架构与数据模型](docs/architecture.md)
 - [安全检测流水线](docs/security-pipeline.md)
+- [API 一览](docs/api.md)
 - [对接 EasilyNET.IdentityServer](docs/identity-integration.md)

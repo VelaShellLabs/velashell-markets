@@ -47,7 +47,13 @@ builder.Services.AddAuthorization(options =>
     // 市场的管理员是市场自己的概念,不该要求对方为我们维护一套角色。
     options.AddPolicy(MarketPolicies.Moderator, policy =>
         policy.RequireAssertion(context =>
-            context.User.FindFirst("sub")?.Value is { } subject && auth.ModeratorSubjects.Contains(subject))));
+            // 主体的取法必须与 PrincipalExtensions.Subject() 完全一致:两处分叉的话,
+            // 换一次声明映射就会出现"归属判断认得出你、审核策略认不出你"。
+            context.User.Identity?.IsAuthenticated == true
+            && auth.ModeratorSubjects.Contains(
+                context.User.FindFirst("sub")?.Value
+                ?? context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                ?? ""))));
 
 // ---- 数据与存储 --------------------------------------------------------------
 builder.Services.AddMongoContext<MarketDbContext>(builder.Configuration.GetConnectionString("Mongo")
@@ -69,6 +75,7 @@ builder.Services.AddSingleton<ScanQueue>();
 builder.Services.AddSingleton<MarkdownRenderer>();
 builder.Services.AddHostedService<MarketIndexInitializer>();
 builder.Services.AddHostedService<PackageReviewWorker>();
+builder.Services.AddHostedService<QuarantineJanitor>();
 builder.Services.AddHostedService<StorageInitializer>();
 
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
@@ -97,7 +104,9 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
+app.MapAccountEndpoints();
 app.MapPluginEndpoints();
+app.MapOwnerEndpoints();
 app.MapUploadEndpoints();
 app.MapReviewEndpoints();
 app.MapModerationEndpoints();

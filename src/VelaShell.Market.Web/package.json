@@ -2,17 +2,18 @@
   "name": "velashell-market-web",
   "version": "0.1.0",
   "private": true,
-  "description": "VelaShell 插件市场前端骨架(React + Umi + antd)",
+  "description": "VelaShell 插件市场前端(React + Umi + antd)",
   "scripts": {
     "dev": "umi dev",
     "build": "umi build",
     "postinstall": "umi setup"
   },
   "dependencies": {
+    "@ant-design/icons": "^5.5.2",
     "antd": "^5.22.0",
+    "oidc-client-ts": "^3.1.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "oidc-client-ts": "^3.1.0"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",

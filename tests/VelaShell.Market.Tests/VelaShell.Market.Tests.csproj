@@ -9,6 +9,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\VelaShell.Market.Infrastructure\VelaShell.Market.Infrastructure.csproj" />
+    <!-- Markdown 清洗与标签归一虽然在 API 层,但它们是安全相关的纯函数,值得单测。 -->
+    <ProjectReference Include="..\..\src\VelaShell.Market.Api\VelaShell.Market.Api.csproj" />
   </ItemGroup>
 
   <ItemGroup>

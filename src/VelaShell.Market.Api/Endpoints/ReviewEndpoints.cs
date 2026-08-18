@@ -21,8 +21,23 @@ public static class ReviewEndpoints
         RouteGroupBuilder group = app.MapGroup("/api/plugins/{id}/reviews").WithTags("Reviews");
 
         group.MapGet("/", ListAsync).AllowAnonymous().WithSummary("某插件的评价列表(分页)。");
+        group.MapGet("/mine", MineAsync).RequireAuthorization().WithSummary("我对该插件的评价(没有则 204)。");
         group.MapPut("/", UpsertAsync).RequireAuthorization().WithSummary("发表或修改我的评价。");
         group.MapDelete("/", DeleteAsync).RequireAuthorization().WithSummary("删除我的评价。");
+    }
+
+    /// <summary>
+    /// 我对该插件的评价。单独一个端点而不是在列表里标记"这条是我的":
+    /// 列表是分页的,我的那条可能在第 7 页,前端没法据此把表单预填成"修改"。
+    /// </summary>
+    private static async Task<IResult> MineAsync(string id, ClaimsPrincipal user, MarketDbContext db, CancellationToken cancellationToken)
+    {
+        string subject = user.Subject();
+        Review? mine = await db.Reviews.Find(r => r.PluginId == id && r.Subject == subject)
+                               .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        return mine is null
+            ? Results.NoContent()
+            : Results.Ok(new { mine.Rating, body = mine.BodyMarkdown, mine.UpdatedAt });
     }
 
     private static async Task<IResult> ListAsync(string id, MarketDbContext db, MarkdownRenderer markdown, int page = 1, int size = 20)
@@ -70,7 +85,7 @@ public static class ReviewEndpoints
         {
             return Results.NotFound();
         }
-        string subject = user.FindFirstValue("sub") ?? user.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        string subject = user.Subject();
         if (string.Equals(subject, plugin.OwnerSubject, StringComparison.Ordinal))
         {
             // 作者给自己打分毫无信息量,而且是最容易被滥用的一条路径。
@@ -95,7 +110,7 @@ public static class ReviewEndpoints
 
     private static async Task<IResult> DeleteAsync(string id, ClaimsPrincipal user, MarketDbContext db, CancellationToken cancellationToken)
     {
-        string subject = user.FindFirstValue("sub") ?? user.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        string subject = user.Subject();
         DeleteResult result = await db.Reviews.DeleteOneAsync(r => r.PluginId == id && r.Subject == subject, cancellationToken).ConfigureAwait(false);
         if (result.DeletedCount == 0)
         {

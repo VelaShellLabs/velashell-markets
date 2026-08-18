@@ -6,7 +6,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="MongoDB.Driver" />
     <PackageReference Include="EasilyNET.Mongo.Core" />
   </ItemGroup>
 

@@ -1,9 +1,15 @@
-import { Alert, Button, Card, Form, Input, Upload, message } from 'antd';
+import { useState } from 'react';
+import { Alert, App, Button, Card, Col, Form, Input, Result, Row, Space, Steps, Typography, Upload } from 'antd';
+import { InboxOutlined } from '@ant-design/icons';
+import { history } from 'umi';
 import { api } from '../auth';
 
-/** 上传页(骨架)。上传后包进隔离区,检测结论在「我的上传」里看。 */
+/** 发布页。上传后包进隔离区,检测结论在「我的上传」里看。 */
 export default function UploadPage() {
+  const { message } = App.useApp();
   const [form] = Form.useForm();
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<{ pluginId: string; version: string } | null>(null);
 
   const submit = async (values: any) => {
     const file = values.file?.[0]?.originFileObj;
@@ -11,56 +17,125 @@ export default function UploadPage() {
       message.warning('请选择 .vpx 文件');
       return;
     }
-    const body = new FormData();
-    body.append('file', file);
-    body.append('description', values.description ?? '');
-    body.append('releaseNotes', values.releaseNotes ?? '');
-    body.append('tags', values.tags ?? '');
-    const response = await api('/uploads', { method: 'POST', body });
-    const payload = await response.json();
-    if (response.ok) {
-      message.success(payload.message);
-      form.resetFields();
-    } else {
-      message.error(payload.error ?? payload.detail ?? '上传失败');
+    setBusy(true);
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      body.append('description', values.description ?? '');
+      body.append('releaseNotes', values.releaseNotes ?? '');
+      body.append('tags', values.tags ?? '');
+      const response = await api('/uploads', { method: 'POST', body });
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok) {
+        setDone({ pluginId: payload.pluginId, version: payload.version });
+      } else {
+        message.error(payload.error ?? payload.detail ?? '上传失败');
+      }
+    } finally {
+      setBusy(false);
     }
   };
 
+  if (done) {
+    return (
+      <div className="market-page">
+        <Result
+          status="success"
+          title={`${done.pluginId} ${done.version} 已进入隔离区`}
+          subTitle="检测通过后会自动发布。命中可疑项的包会转人工复核,结论与原因都能在「我的上传」里看到。"
+          extra={[
+            <Button type="primary" key="mine" onClick={() => history.push('/mine')}>
+              查看检测进度
+            </Button>,
+            <Button key="again" onClick={() => { setDone(null); form.resetFields(); }}>
+              继续上传
+            </Button>,
+          ]}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div style={{ maxWidth: 720, margin: '32px auto', padding: '0 16px' }}>
-      <Alert
-        type="info"
-        showIcon
-        style={{ marginBottom: 16 }}
-        message="上传的包会先进入隔离区"
-        description="通过容器校验、结构检查与病毒扫描后才会自动发布;命中可疑项的包转人工复核。插件 id、版本号与兼容信息一律取自包内的 plugin.json,不接受手填。"
+    <div className="market-page">
+      <Typography.Title level={3}>发布插件</Typography.Title>
+
+      <Steps
+        size="small"
+        current={0}
+        style={{ margin: '20px 0 28px' }}
+        items={[
+          { title: '上传 .vpx' },
+          { title: '隔离检测', description: '容器 / 结构 / 清单 / 病毒' },
+          { title: '发布', description: '通过后自动上架' },
+        ]}
       />
-      <Card>
-        <Form form={form} layout="vertical" onFinish={submit}>
-          <Form.Item
-            name="file"
-            label=".vpx 包"
-            valuePropName="fileList"
-            getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList)}
-          >
-            <Upload beforeUpload={() => false} maxCount={1} accept=".vpx">
-              <Button>选择文件</Button>
-            </Upload>
-          </Form.Item>
-          <Form.Item name="description" label="插件说明(Markdown)">
-            <Input.TextArea rows={8} />
-          </Form.Item>
-          <Form.Item name="releaseNotes" label="本版本更新说明(Markdown)">
-            <Input.TextArea rows={4} />
-          </Form.Item>
-          <Form.Item name="tags" label="标签(逗号分隔)">
-            <Input placeholder="ssh, 运维, 数据库" />
-          </Form.Item>
-          <Button type="primary" htmlType="submit">
-            上传
-          </Button>
-        </Form>
-      </Card>
+
+      <Row gutter={24}>
+        <Col xs={24} lg={15}>
+          <Card>
+            <Form form={form} layout="vertical" onFinish={submit}>
+              <Form.Item
+                name="file"
+                valuePropName="fileList"
+                getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList)}
+                rules={[{ required: true, message: '请选择 .vpx 包' }]}
+              >
+                <Upload.Dragger beforeUpload={() => false} maxCount={1} accept=".vpx">
+                  <p className="ant-upload-drag-icon"><InboxOutlined /></p>
+                  <p className="ant-upload-text">把 .vpx 拖到这里,或点击选择</p>
+                  <p className="ant-upload-hint">
+                    用 <code>dotnet build -t:PackVpx</code> 或 <code>vela-plugin pack</code> 生成
+                  </p>
+                </Upload.Dragger>
+              </Form.Item>
+
+              <Form.Item name="description" label="插件说明(Markdown)">
+                <Input.TextArea rows={10} placeholder={'## 它能做什么\n\n…\n\n## 怎么用\n\n…'} />
+              </Form.Item>
+              <Form.Item name="releaseNotes" label="本版本更新说明(Markdown)">
+                <Input.TextArea rows={4} />
+              </Form.Item>
+              <Form.Item name="tags" label="标签" extra="逗号分隔,最多 10 个,会统一转小写">
+                <Input placeholder="ssh, 运维, 数据库" />
+              </Form.Item>
+
+              <Space>
+                <Button type="primary" htmlType="submit" loading={busy} size="large">
+                  上传并送检
+                </Button>
+                <Button onClick={() => form.resetFields()}>重填</Button>
+              </Space>
+            </Form>
+          </Card>
+        </Col>
+
+        <Col xs={24} lg={9}>
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message="包会先进隔离区"
+            description="上传的包落在不对外开放的隔离桶里,只有通过容器校验、结构检查与病毒扫描后才会搬进正式桶并可下载。"
+          />
+          <Card size="small" title="几条会被直接拒收的情况">
+            <ul style={{ paddingLeft: 18, margin: 0, color: '#475467', lineHeight: 2 }}>
+              <li>把 zip 改成 <code>.vpx</code>(市场只认专属容器)</li>
+              <li>包内含 <code>.exe</code> / <code>.msi</code> 等可直接运行的文件</li>
+              <li>路径逃逸、重名条目、解压炸弹</li>
+              <li>清单里的 id / 版本与包不符</li>
+              <li>病毒库命中</li>
+            </ul>
+          </Card>
+          <Card size="small" title="不会被拒、但会转人工的情况" style={{ marginTop: 16 }}>
+            <ul style={{ paddingLeft: 18, margin: 0, color: '#475467', lineHeight: 2 }}>
+              <li>包内含脚本(<code>.ps1</code> / <code>.sh</code> …)或原生库</li>
+              <li>带了本该由宿主提供的 <code>Avalonia*</code> / <code>PluginSdk</code></li>
+              <li>签名公钥与该插件既往版本不同</li>
+            </ul>
+          </Card>
+        </Col>
+      </Row>
     </div>
   );
 }

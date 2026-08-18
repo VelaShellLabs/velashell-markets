@@ -44,8 +44,7 @@ public static class UploadEndpoints
         CancellationToken cancellationToken)
     {
         ILogger logger = loggerFactory.CreateLogger("Upload");
-        string subject = user.FindFirstValue("sub") ?? user.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? throw new InvalidOperationException("Authenticated principal has no subject claim.");
+        string subject = user.Subject();
 
         if (file.Length == 0)
         {
@@ -101,7 +100,7 @@ public static class UploadEndpoints
                     Homepage = manifest.Homepage,
                     License = manifest.License,
                     DescriptionMarkdown = description ?? "",
-                    Tags = NormalizeTags(tags)
+                    Tags = TagList.Normalize(tags)
                 };
                 await db.Plugins.InsertOneAsync(plugin, cancellationToken: cancellationToken).ConfigureAwait(false);
             }
@@ -120,7 +119,7 @@ public static class UploadEndpoints
                 }
                 if (!string.IsNullOrWhiteSpace(tags))
                 {
-                    update = update.Set(p => p.Tags, NormalizeTags(tags));
+                    update = update.Set(p => p.Tags, TagList.Normalize(tags));
                 }
                 await db.Plugins.UpdateOneAsync(p => p.Id == plugin.Id, update, cancellationToken: cancellationToken).ConfigureAwait(false);
             }
@@ -195,7 +194,7 @@ public static class UploadEndpoints
 
     private static async Task<IResult> MineAsync(ClaimsPrincipal user, MarketDbContext db, CancellationToken cancellationToken)
     {
-        string subject = user.FindFirstValue("sub") ?? user.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        string subject = user.Subject();
         List<PluginVersion> versions = await db.Versions
                                                .Find(v => v.UploadedBySubject == subject)
                                                .SortByDescending(v => v.UploadedAt)
@@ -223,12 +222,4 @@ public static class UploadEndpoints
         }));
     }
 
-    /// <summary>标签归一:小写、去空白、去重、限量。标签是检索维度,不是自由文本。</summary>
-    private static List<string> NormalizeTags(string? tags) =>
-        (tags ?? "").Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                    .Select(t => t.ToLowerInvariant())
-                    .Where(t => t.Length <= 32)
-                    .Distinct(StringComparer.Ordinal)
-                    .Take(10)
-                    .ToList();
 }
