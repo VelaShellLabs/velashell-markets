@@ -19,7 +19,7 @@ RUN dotnet publish src/VelaShell.Market.Api/VelaShell.Market.Api.csproj \
 FROM mcr.microsoft.com/dotnet/nightly/aspnet:11.0-preview
 WORKDIR /app
 # 不用 root 跑:这个进程要解开陌生人上传的压缩包,能少一层权限就少一层。
-RUN adduser --system --group --no-create-home market && chown -R market /app
+RUN useradd --system --user-group --no-create-home market && chown -R market:market /app
 USER market
 COPY --from=build /app .
 ENV ASPNETCORE_HTTP_PORTS=8080 \

@@ -87,7 +87,9 @@ services:
       - Market__SeedDemoData=${SEED_DEMO_DATA:-false}
       - ASPNETCORE_HTTP_PORTS=8080
       - ConnectionStrings__Mongo=mongodb://mongo:27017/velashell-market
-      - ObjectStorage__Endpoint=http://minio:9000
+      # 用 host.docker.internal 而不是 minio:把预签名 URL 的 host 同时做成
+      # 容器内(经 extra_hosts 走 host-gateway)与宿主机浏览器(Docker Desktop 会解析)都能访问。
+      - ObjectStorage__Endpoint=http://host.docker.internal:9000
       - ObjectStorage__AccessKey=${MINIO_ROOT_USER:-minioadmin}
       - ObjectStorage__SecretKey=${MINIO_ROOT_PASSWORD:-minioadmin}
       - ClamAv__Host=clamav
@@ -128,7 +130,7 @@ services:
         WORKDIR /src
         COPY . .
         RUN dotnet publish src/EasilyNET.IdentityServer.Host/EasilyNET.IdentityServer.Host.csproj \
-            -c Release -o /app --nologo
+            -c Release -f net11.0 -o /app --nologo
         FROM mcr.microsoft.com/dotnet/nightly/aspnet:11.0-preview
         WORKDIR /app
         COPY --from=build /app .
@@ -140,6 +142,11 @@ services:
     environment:
       - TZ=Asia/Chongqing
       - ASPNETCORE_ENVIRONMENT=Development
+      # Issuer 用浏览器可访问的地址:前端 oidc-client-ts 从 discovery 文档读取所有端点,
+      # 如果issuer是内部地址(http://identity:8080),浏览器无法解析该主机名。
+      # API 侧通过 ValidIssuer 显式覆盖 issuer 校验,所以这里不影响后端验签。
+      - IdentityServer__Issuer=http://localhost:7020
+      - IdentityServer__RequireHttpsForOAuth=false
     ports:
       - "7020:8080"
 

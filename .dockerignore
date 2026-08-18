@@ -1,0 +1,9 @@
+# 宿主与构建产物一律不进构建上下文(尤其 Windows 生成的 obj/ 资产文件
+# 含本机路径,拷进 Linux 容器会让 dotnet publish --no-restore 读崩)。
+.git/
+.vs/
+**/obj/
+**/bin/
+**/node_modules/
+.env
+*.user

@@ -23,6 +23,13 @@ builder.Services.Configure<MarketAuthOptions>(builder.Configuration.GetSection(M
 // ---- 身份认证:资源服务器姿态 ------------------------------------------------
 // 市场自己不发令牌,只验 EasilyNET.IdentityServer 签发的 JWT(经 Authority 拉 discovery 与 JWKS)。
 // 这样这边不需要知道对方任何内部实现,对方换存储/换部署形态也影响不到我们。
+//
+// ⚠️ Docker 网络特殊性:
+//   - IdentityServer 的 issuer 是浏览器可访问的 http://localhost:7020
+//   - 但 API 跑在容器内,localhost 指向自身,必须通过服务名 http://identity:8080 访问 IdentityServer
+//   - discovery 文档的 jwks_uri 基于 issuer 生成(http://localhost:7020/.well-known/jwks),
+//     容器内不可达。InternalAuthorityConfigurationManager 在拿到 discovery 后把 jwks_uri
+//     替换为 http://identity:8080/.well-known/jwks,使签名验证能拿到公钥。
 MarketAuthOptions auth = builder.Configuration.GetSection(MarketAuthOptions.SectionName).Get<MarketAuthOptions>() ?? new();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
        .AddJwtBearer(options =>
@@ -31,11 +38,15 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
            options.Audience = auth.Audience;
            // 开发环境里 IdentityServer 常跑在自签证书上,允许显式放开;生产必须为 false。
            options.RequireHttpsMetadata = auth.RequireHttpsMetadata;
+           // 用自定义 ConfigurationManager 替换默认行为:从内部地址拉 discovery,再把
+           // jwks_uri 等 URL 从 localhost 替换为内部服务名,使容器内能完成签名验证。
+           options.ConfigurationManager = new VelaShell.Market.Api.InternalAuthorityConfigurationManager(auth.Authority);
            options.TokenValidationParameters = new TokenValidationParameters
            {
                ValidateIssuer = true,
-               ValidIssuer = auth.Authority,
+               ValidIssuer = "http://localhost:7020",
                ValidateAudience = !string.IsNullOrEmpty(auth.Audience),
+               ValidAudience = auth.Audience,
                ValidateLifetime = true,
                ClockSkew = TimeSpan.FromSeconds(30),
                NameClaimType = "name",

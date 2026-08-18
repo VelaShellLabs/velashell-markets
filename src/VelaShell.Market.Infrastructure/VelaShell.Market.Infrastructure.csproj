@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <PackageReference Include="EasilyNET.Mongo.Core" />
+    <PackageReference Include="VelaShell.PluginSdk" />
     <PackageReference Include="AWSSDK.S3" />
   </ItemGroup>
 
@@ -19,14 +20,6 @@
          预览版 .NET 上这些包的版本号每个 preview 都在动,钉错一个就是一串降级警告,
          而它们本来就随运行时一起交付。 -->
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-  </ItemGroup>
-
-  <!-- .vpx 容器解析:本机有 VelaShell 仓库就引工程,否则引包。见根 Directory.Build.props。 -->
-  <ItemGroup Condition="'$(UseLocalVelaShellSdk)' == 'true'">
-    <ProjectReference Include="$(VelaShellSdkProject)" />
-  </ItemGroup>
-  <ItemGroup Condition="'$(UseLocalVelaShellSdk)' != 'true'">
-    <PackageReference Include="VelaShell.PluginSdk" />
   </ItemGroup>
 
 </Project>

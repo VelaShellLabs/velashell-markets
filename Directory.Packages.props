@@ -16,7 +16,7 @@
 
   <ItemGroup>
     <!-- 插件包容器与清单:与 VelaShell 宿主同一份实现。 -->
-    <PackageVersion Include="VelaShell.PluginSdk" Version="1.0.0-preview.1" />
+    <PackageVersion Include="VelaShell.PluginSdk" Version="1.0.0" />
   </ItemGroup>
 
   <ItemGroup>

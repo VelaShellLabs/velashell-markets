@@ -1,5 +1,6 @@
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
+using MongoDB.Bson.Serialization.IdGenerators;
 
 namespace VelaShell.Market.Domain;
 
@@ -11,7 +12,8 @@ namespace VelaShell.Market.Domain;
 public sealed class Plugin
 {
     /// <summary>插件 id,同时是主键(小写 <c>[a-z0-9.-]</c>)。</summary>
-    [BsonId]
+    /// <remarks>string 主键默认按 ObjectId 处理(要求 24 位 hex),这里显式声明为不透明字符串。</remarks>
+    [BsonId(IdGenerator = typeof(StringObjectIdGenerator))]
     public required string Id { get; set; }
 
     /// <summary>拥有者的身份主体(IdentityServer 的 <c>sub</c>)。只有它能发新版本。</summary>

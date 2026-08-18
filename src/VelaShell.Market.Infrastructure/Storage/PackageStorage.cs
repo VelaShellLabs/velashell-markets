@@ -43,8 +43,7 @@ public sealed class PackageStorage(IAmazonS3 s3, IOptions<ObjectStorageOptions> 
             Key = key,
             InputStream = content,
             // 隔离区的东西一律按不可识别的二进制对待,绝不给一个会让浏览器尝试解析的类型。
-            ContentType = "application/octet-stream",
-            DisablePayloadSigning = true
+            ContentType = "application/octet-stream"
         };
         PutObjectResponse response = await s3.PutObjectAsync(request, cancellationToken).ConfigureAwait(false);
         logger.LogInformation("Stored {Key} in quarantine (etag {ETag}).", key, response.ETag);
@@ -94,6 +93,9 @@ public sealed class PackageStorage(IAmazonS3 s3, IOptions<ObjectStorageOptions> 
             BucketName = _options.PublicBucket,
             Key = key,
             Expires = DateTime.UtcNow.Add(_options.DownloadUrlLifetime),
+            // 默认按 HTTPS 签;Endpoint 是 http 的 MinIO 时必须显式改回 HTTP,
+            // 否则签出来的 URL 打不开(MinIO 上根本没有 TLS)。
+            Protocol = Protocol.HTTP,
             // 让浏览器直接落成 .vpx 文件而不是尝试展示。
             ResponseHeaderOverrides = new()
             {

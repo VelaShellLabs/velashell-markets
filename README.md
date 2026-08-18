@@ -13,9 +13,6 @@
 ## 快速开始
 
 ```powershell
-# 一次性:把 VelaShell 的插件 SDK 打进本地包源(SDK 发到 nuget.org 后此步可省)
-pwsh ./build/Sync-VelaShellSdk.ps1
-
 # 起全套,并播三个演示插件 —— 它们会**真的走一遍检测流水线**后才出现在首页
 $env:SEED_DEMO_DATA='true'
 $env:ASPNETCORE_ENVIRONMENT='Development'
