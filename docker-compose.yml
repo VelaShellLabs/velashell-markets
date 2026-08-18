@@ -1,0 +1,146 @@
+# VelaShell 插件市场的完整编排。
+#
+#   docker compose up -d                     # 数据库 + 对象存储 + 病毒引擎 + API + 前端
+#   docker compose --profile identity up -d  # 再带上 EasilyNET.IdentityServer(从同级仓库构建)
+#
+# 一次性准备(SDK 还没发到 nuget.org 之前):
+#   pwsh ./build/Sync-VelaShellSdk.ps1       # 把 VelaShell 的 SDK 包打进 ./packages
+#
+# 端口:API 8080 / 前端 8000 / MinIO 9000(控制台 9001)/ Mongo 27017 / clamd 3310
+services:
+
+  mongo:
+    image: mongo:8
+    container_name: market-mongo
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Chongqing
+      - MONGO_INITDB_DATABASE=velashell-market
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  minio:
+    image: minio/minio:latest
+    container_name: market-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      - TZ=Asia/Chongqing
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # 病毒扫描引擎。首次启动会拉一遍病毒库(几分钟、约 300MB),healthcheck 因此给得很宽松 ——
+  # 库没就绪时 clamd 不接受连接,而检测流水线会把"引擎不可用"当作重试而不是放行,不会误判上传者。
+  clamav:
+    image: clamav/clamav:latest
+    container_name: market-clamav
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Chongqing
+      - CLAMAV_NO_MILTERD=true
+    ports:
+      - "3310:3310"
+    volumes:
+      - clamav-db:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 300s
+
+  api:
+    build:
+      context: .
+      dockerfile: build/api.Dockerfile
+    container_name: market-api
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      clamav:
+        condition: service_started
+    environment:
+      - TZ=Asia/Chongqing
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
+      - ASPNETCORE_HTTP_PORTS=8080
+      - ConnectionStrings__Mongo=mongodb://mongo:27017/velashell-market
+      - ObjectStorage__Endpoint=http://minio:9000
+      - ObjectStorage__AccessKey=${MINIO_ROOT_USER:-minioadmin}
+      - ObjectStorage__SecretKey=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - ClamAv__Host=clamav
+      - ClamAv__Port=3310
+      # 认证:默认指向同级仓库跑起来的 IdentityServer。用 identity profile 时改成 http://identity:8080。
+      - Auth__Authority=${AUTH_AUTHORITY:-https://host.docker.internal:7020}
+      - Auth__Audience=${AUTH_AUDIENCE:-velashell-market}
+      - Auth__RequireHttpsMetadata=${AUTH_REQUIRE_HTTPS:-false}
+      - Auth__AllowedOrigins__0=${WEB_ORIGIN:-http://localhost:8000}
+      # 审核员的 sub。留空则审核台没人进得去 —— 那时"需人工复核"的包会一直停在隔离区,这是安全的默认。
+      - Auth__ModeratorSubjects__0=${MODERATOR_SUBJECT:-}
+    ports:
+      - "8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  web:
+    build:
+      context: ./src/VelaShell.Market.Web
+      dockerfile: ../../build/web.Dockerfile
+    container_name: market-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      - TZ=Asia/Chongqing
+    ports:
+      - "8000:80"
+
+  # 可选:直接从同级的 EasilyNET.IdentityServer 仓库构建并跑起来。
+  # 不用它的话(比如你在 VS 里跑),把 AUTH_AUTHORITY 指向你自己的地址即可。
+  identity:
+    profiles: ["identity"]
+    build:
+      context: ../EasilyNET.IdentityServer
+      dockerfile_inline: |
+        FROM mcr.microsoft.com/dotnet/nightly/sdk:11.0-preview AS build
+        WORKDIR /src
+        COPY . .
+        RUN dotnet publish src/EasilyNET.IdentityServer.Host/EasilyNET.IdentityServer.Host.csproj \
+            -c Release -o /app --nologo
+        FROM mcr.microsoft.com/dotnet/nightly/aspnet:11.0-preview
+        WORKDIR /app
+        COPY --from=build /app .
+        ENV ASPNETCORE_HTTP_PORTS=8080
+        EXPOSE 8080
+        ENTRYPOINT ["dotnet", "EasilyNET.IdentityServer.Host.dll"]
+    container_name: market-identity
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Chongqing
+      - ASPNETCORE_ENVIRONMENT=Development
+    ports:
+      - "7020:8080"
+
+volumes:
+  mongo-data:
+  minio-data:
+  clamav-db:

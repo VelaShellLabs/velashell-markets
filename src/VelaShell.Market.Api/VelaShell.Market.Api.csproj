@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>VelaShell.Market.Api</RootNamespace>
+    <Description>VelaShell 插件市场的 HTTP API:上传与隔离检测、插件与版本检索、评价、下载签名、审核台。</Description>
+    <UserSecretsId>velashell-market-api</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\VelaShell.Market.Infrastructure\VelaShell.Market.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="EasilyNET.Mongo.AspNetCore" />
+    <PackageReference Include="EasilyNET.WebCore" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Swashbuckle.AspNetCore" />
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Markdig" />
+  </ItemGroup>
+
+</Project>

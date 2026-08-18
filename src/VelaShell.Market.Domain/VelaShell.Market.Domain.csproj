@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>VelaShell.Market.Domain</RootNamespace>
+    <Description>VelaShell 插件市场的领域模型:插件、版本、评价、扫描报告与它们的状态机。</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MongoDB.Driver" />
+    <PackageReference Include="EasilyNET.Mongo.Core" />
+  </ItemGroup>
+
+</Project>

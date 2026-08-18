@@ -1,0 +1,39 @@
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- EasilyNET:MongoDB 上下文与 Web 基建。
+         版本按日期滚动(6.yy.MMdd.x),这里锁定具体版本 —— 中央包管理不接受浮动版本,
+         而且插件市场是长期服务,依赖版本应当是一次明确的选择而不是每次还原的意外。 -->
+    <PackageVersion Include="EasilyNET.Core" Version="6.26.201.257" />
+    <PackageVersion Include="EasilyNET.WebCore" Version="6.26.813.102" />
+    <PackageVersion Include="EasilyNET.Mongo.Core" Version="6.26.813.102" />
+    <PackageVersion Include="EasilyNET.Mongo.AspNetCore" Version="6.26.629.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 插件包容器与清单:与 VelaShell 宿主同一份实现。 -->
+    <PackageVersion Include="VelaShell.PluginSdk" Version="1.0.0-preview.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageVersion Include="MongoDB.Driver" Version="3.11.0" />
+    <!-- 对象存储走 S3 协议(MinIO 兼容),不绑定 MinIO 自家 SDK:
+         将来换 S3/OSS/COS 只改配置里的 Endpoint 与凭据。 -->
+    <PackageVersion Include="AWSSDK.S3" Version="4.0.102.1" />
+    <PackageVersion Include="Markdig" Version="0.42.0" />
+    <!-- net10 版在 net11 上照常可用(共享框架向前兼容);等 net11 正式版的包出来再抬。 -->
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
+    <PackageVersion Include="Swashbuckle.AspNetCore" Version="9.0.6" />
+    <PackageVersion Include="Serilog.AspNetCore" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="MSTest" Version="3.10.4" />
+  </ItemGroup>
+
+</Project>

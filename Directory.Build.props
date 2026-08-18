@@ -1,0 +1,39 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <LangVersion>preview</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnablePreviewFeatures>true</EnablePreviewFeatures>
+    <!-- VelaShell.PluginSdk 是预览版 .NET 上构建的契约程序集,带 RequiresPreviewFeatures 标记;
+         不开这个开关的话,凡是碰到它的类型都会报 CA2252。 -->
+    <NoWarn>$(NoWarn);CA2252;SYSLIB5007;NETSDK1057</NoWarn>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Version>0.1.0</Version>
+    <Authors>joesdu</Authors>
+    <Product>VelaShell Market</Product>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/joesdu/velashell-markets</RepositoryUrl>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!--
+    .vpx 容器与 plugin.json 的解析**必须**复用宿主那一份实现(VelaShell.PluginSdk),
+    否则"市场收得下、宿主装不上"是迟早的事。两种取用方式:
+      · 本机开发:同级目录有 VelaShell 仓库时直接引工程,改一处两边同步;
+      · 容器构建 / CI:引 NuGet 包(见 nuget.config 里的本地源与 nuget.org)。
+    条件判断放在这里,两条路径的产物完全一致。
+  -->
+  <PropertyGroup>
+    <VelaShellSdkProject>$(MSBuildThisFileDirectory)..\VelaShell\plugin-sdk\VelaShell.PluginSdk\VelaShell.PluginSdk.csproj</VelaShellSdkProject>
+    <UseLocalVelaShellSdk Condition="'$(UseLocalVelaShellSdk)' == '' and Exists('$(VelaShellSdkProject)')">true</UseLocalVelaShellSdk>
+    <UseLocalVelaShellSdk Condition="'$(UseLocalVelaShellSdk)' == ''">false</UseLocalVelaShellSdk>
+  </PropertyGroup>
+
+</Project>
