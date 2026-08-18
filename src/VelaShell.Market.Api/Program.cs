@@ -77,6 +77,8 @@ builder.Services.AddHostedService<MarketIndexInitializer>();
 builder.Services.AddHostedService<PackageReviewWorker>();
 builder.Services.AddHostedService<QuarantineJanitor>();
 builder.Services.AddHostedService<StorageInitializer>();
+// 播种排在存储初始化之后:它要往隔离桶里写东西,桶得先存在。默认关闭,见 Market:SeedDemoData。
+builder.Services.AddHostedService<DemoDataSeeder>();
 
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
     policy.WithOrigins(auth.AllowedOrigins).AllowAnyHeader().AllowAnyMethod()));

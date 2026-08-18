@@ -12,16 +12,21 @@
 
 ## 快速开始
 
-```bash
+```powershell
 # 一次性:把 VelaShell 的插件 SDK 打进本地包源(SDK 发到 nuget.org 后此步可省)
 pwsh ./build/Sync-VelaShellSdk.ps1
 
-# 起全套:MongoDB + MinIO + ClamAV + API + 前端
-docker compose up -d
+# 起全套,并播三个演示插件 —— 它们会**真的走一遍检测流水线**后才出现在首页
+$env:SEED_DEMO_DATA='true'
+$env:ASPNETCORE_ENVIRONMENT='Development'
+docker compose up -d --build
 
 # 需要连同 IdentityServer 一起起(从同级仓库构建):
 docker compose --profile identity up -d
 ```
+
+浏览、搜索、看详情不需要登录;上传、评价、审核需要 IdentityServer。
+完整部署说明(含生产要改的项与常见故障)见 [docs/deployment.md](docs/deployment.md)。
 
 | 服务 | 地址 | 说明 |
 | --- | --- | --- |
@@ -74,6 +79,7 @@ docs/                                 架构、安全流水线、身份对接
 
 ## 文档
 
+- [部署](docs/deployment.md)
 - [架构与数据模型](docs/architecture.md)
 - [安全检测流水线](docs/security-pipeline.md)
 - [API 一览](docs/api.md)

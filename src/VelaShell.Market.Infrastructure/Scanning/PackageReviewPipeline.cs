@@ -49,7 +49,11 @@ public sealed class PackageReviewWorker(
     IServiceScopeFactory scopeFactory,
     ILogger<PackageReviewWorker> logger) : BackgroundService
 {
-    private const int MaxAttempts = 3;
+    /// <summary>引擎不可用时的重试次数。</summary>
+    private const int MaxAttempts = 6;
+
+    /// <summary>重试退避的基数,实际延迟为 <c>基数 × 已尝试次数</c>(30s、60s、90s…,累计约 10 分钟)。</summary>
+    private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(30);
 
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -161,11 +165,17 @@ public sealed class PackageReviewWorker(
                 logger.LogWarning(ex, "ClamAV unavailable while scanning {PluginId} {Version}.", version.PluginId, version.Version);
                 if (report.Attempts < MaxAttempts)
                 {
-                    // 重排队,不下结论。延迟交给下一轮启动或人工触发。
+                    // 重排队,不下结论。**必须延迟**:立刻重排的话三次重试会在几毫秒内耗完,
+                    // 而 clamd 首次启动要拉几分钟病毒库 —— 那样每个上传都会在冷启动时被判 Errored,
+                    // 明明是我们这边还没准备好。退避时长按尝试次数递增。
                     report.Verdict = ScanVerdict.Pending;
                     report.CompletedAt = null;
                     await SetStatusAsync(db, version.Id, PluginVersionStatus.Quarantined, report, cancellationToken).ConfigureAwait(false);
-                    queue.Enqueue(version.Id);
+                    TimeSpan delay = RetryDelay * report.Attempts;
+                    logger.LogInformation("Retrying {PluginId} {Version} in {Delay}.", version.PluginId, version.Version, delay);
+                    _ = Task.Delay(delay, cancellationToken)
+                            .ContinueWith(_ => queue.Enqueue(version.Id), CancellationToken.None,
+                                TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default);
                     return;
                 }
                 report.Findings.Add(new("CLAMAV_UNAVAILABLE", ScanSeverity.Blocking,

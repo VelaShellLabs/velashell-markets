@@ -82,6 +82,9 @@ services:
     environment:
       - TZ=Asia/Chongqing
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
+      # 演示数据:打开后在插件集合为空时播三个样例插件,它们会**真的走一遍检测流水线**
+      # (打包 → 落隔离桶 → 静态检查 → 病毒扫描 → 发布),于是首页/下载/检测报告都是真实产物。
+      - Market__SeedDemoData=${SEED_DEMO_DATA:-false}
       - ASPNETCORE_HTTP_PORTS=8080
       - ConnectionStrings__Mongo=mongodb://mongo:27017/velashell-market
       - ObjectStorage__Endpoint=http://minio:9000
