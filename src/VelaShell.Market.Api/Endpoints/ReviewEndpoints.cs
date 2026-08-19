@@ -48,6 +48,12 @@ public static class ReviewEndpoints
             Builders<Review>.Filter.Eq(r => r.PluginId, id),
             Builders<Review>.Filter.Eq(r => r.IsHidden, false));
         long total = await db.Reviews.CountDocumentsAsync(filter).ConfigureAwait(false);
+        // 各星级的条数。前端用它画"应用商店式"的评分分布条 —— 光有均值看不出口碑是两极还是一致。
+        Dictionary<int, int> distribution = (await db.Reviews.Aggregate()
+                                                     .Match(filter)
+                                                     .Group(r => r.Rating, g => new { Rating = g.Key, Count = g.Count() })
+                                                     .ToListAsync().ConfigureAwait(false))
+            .ToDictionary(g => g.Rating, g => g.Count);
         List<Review> items = await db.Reviews.Find(filter)
                                      .SortByDescending(r => r.UpdatedAt)
                                      .Skip((page - 1) * size).Limit(size)
@@ -57,6 +63,7 @@ public static class ReviewEndpoints
             total,
             page,
             size,
+            distribution,
             items = items.Select(r => new
             {
                 r.DisplayName,

@@ -37,26 +37,8 @@ export const logout = () => userManager.signoutRedirect();
 export const completeLogin = () => userManager.signinRedirectCallback();
 export const getUser = (): Promise<MarketUser | null> => userManager.getUser();
 
-/** 带上 Bearer 令牌的 fetch。没有令牌时照常发 —— 浏览与检索本来就允许匿名。 */
-export async function api(path: string, init: RequestInit = {}): Promise<Response> {
+/** 当前用户的 Bearer 令牌,没有则 undefined —— 浏览与检索本来就允许匿名。 */
+export async function getAccessToken(): Promise<string | undefined> {
   const user = await getUser();
-  const headers = new Headers(init.headers);
-  if (user?.access_token) {
-    headers.set('Authorization', `Bearer ${user.access_token}`);
-  }
-  return fetch(`/api${path}`, { ...init, headers });
+  return user?.access_token;
 }
-
-/** 取 JSON;失败时抛出后端给的可读消息 —— 直接把 500 甩给用户看没有任何帮助。 */
-export async function apiJson<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await api(path, init);
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({}));
-    throw new Error(payload.error ?? payload.detail ?? `请求失败(${response.status})`);
-  }
-  return response.status === 204 ? (null as T) : ((await response.json()) as T);
-}
-
-/** 发 JSON。 */
-export const apiSend = (path: string, method: string, body: unknown) =>
-  api(path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

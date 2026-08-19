@@ -1,9 +1,7 @@
 <Project>
-
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
-
   <ItemGroup>
     <!-- EasilyNET:MongoDB 上下文与 Web 基建。
          版本按日期滚动(6.yy.MMdd.x),这里锁定具体版本 —— 中央包管理不接受浮动版本,
@@ -12,13 +10,12 @@
     <PackageVersion Include="EasilyNET.WebCore" Version="6.26.813.102" />
     <PackageVersion Include="EasilyNET.Mongo.Core" Version="6.26.813.102" />
     <PackageVersion Include="EasilyNET.Mongo.AspNetCore" Version="6.26.629.1" />
+    <PackageVersion Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.24.2-preview.1" />
   </ItemGroup>
-
   <ItemGroup>
     <!-- 插件包容器与清单:与 VelaShell 宿主同一份实现。 -->
     <PackageVersion Include="VelaShell.PluginSdk" Version="1.0.0" />
   </ItemGroup>
-
   <ItemGroup>
     <!-- 统一认证服务(VelaShell.Market.Identity)的 OIDC 实现。
          7.6.0 是稳定版,包里带 net10.0 目标框架 —— net11 共享框架向前兼容,能直接用;
@@ -26,7 +23,6 @@
     <PackageVersion Include="OpenIddict.AspNetCore" Version="7.6.0" />
     <PackageVersion Include="OpenIddict.MongoDb" Version="7.6.0" />
   </ItemGroup>
-
   <ItemGroup>
     <PackageVersion Include="MongoDB.Driver" Version="3.11.0" />
     <!-- 对象存储走 S3 协议(MinIO 兼容),不绑定 MinIO 自家 SDK:
@@ -38,10 +34,8 @@
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="9.0.6" />
     <PackageVersion Include="Serilog.AspNetCore" Version="9.0.0" />
   </ItemGroup>
-
   <ItemGroup>
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageVersion Include="MSTest" Version="3.10.4" />
   </ItemGroup>
-
 </Project>

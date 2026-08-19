@@ -1,25 +1,8 @@
-import { useEffect, useState } from 'react';
-import { App, Button, Card, Drawer, Empty, Form, Input, Skeleton, Space, Table, Tag, Typography } from 'antd';
+import { getMyPlugins, updatePlugin } from '@/services/me';
 import { EditOutlined } from '@ant-design/icons';
-import { history } from 'umi';
-import { api, apiSend } from '../auth';
-
-type MyPlugin = {
-  id: string;
-  displayName: string;
-  summary?: string;
-  descriptionMarkdown: string;
-  tags: string[];
-  homepage?: string;
-  license?: string;
-  latestVersion?: string;
-  downloads: number;
-  ratingAverage: number;
-  ratingCount: number;
-  isUnlisted: boolean;
-  unlistedReason?: string;
-  updatedAt: string;
-};
+import { history } from '@umijs/max';
+import { App, Button, Card, Drawer, Empty, Form, Input, Skeleton, Space, Table, Tag, Typography } from 'antd';
+import { useEffect, useState } from 'react';
 
 /**
  * 我的插件:改页面文案与标签。
@@ -29,13 +12,12 @@ type MyPlugin = {
  */
 export default function OwnerPage() {
   const { message } = App.useApp();
-  const [items, setItems] = useState<MyPlugin[] | null>(null);
-  const [editing, setEditing] = useState<MyPlugin | null>(null);
+  const [items, setItems] = useState<MarketAPI.MyPlugin[] | null>(null);
+  const [editing, setEditing] = useState<MarketAPI.MyPlugin | null>(null);
   const [form] = Form.useForm();
 
   const load = () =>
-    api('/me/plugins')
-      .then((r) => r.json())
+    getMyPlugins()
       .then(setItems)
       .catch(() => setItems([]));
 
@@ -43,7 +25,7 @@ export default function OwnerPage() {
     load();
   }, []);
 
-  const openEditor = (plugin: MyPlugin) => {
+  const openEditor = (plugin: MarketAPI.MyPlugin) => {
     setEditing(plugin);
     form.setFieldsValue({
       descriptionMarkdown: plugin.descriptionMarkdown,
@@ -53,14 +35,13 @@ export default function OwnerPage() {
   };
 
   const save = async (values: any) => {
-    const response = await apiSend(`/plugins/${editing!.id}`, 'PUT', values);
-    if (response.ok) {
+    try {
+      await updatePlugin(editing!.id, values);
       message.success('已保存');
       setEditing(null);
       await load();
-    } else {
-      const payload = await response.json().catch(() => ({}));
-      message.error(payload.error ?? payload.detail ?? '保存失败');
+    } catch {
+      // 失败信息已由统一错误处理展示。
     }
   };
 
@@ -69,16 +50,20 @@ export default function OwnerPage() {
       <Typography.Title level={3}>我的插件</Typography.Title>
 
       {items === null ? (
-        <Card><Skeleton active paragraph={{ rows: 4 }} /></Card>
+        <Card>
+          <Skeleton active paragraph={{ rows: 4 }} />
+        </Card>
       ) : items.length === 0 ? (
         <Card>
           <Empty description="你还没有发布过插件">
-            <Button type="primary" onClick={() => history.push('/upload')}>去发布</Button>
+            <Button type="primary" onClick={() => history.push('/upload')}>
+              去发布
+            </Button>
           </Empty>
         </Card>
       ) : (
         <Card styles={{ body: { padding: 0 } }}>
-          <Table<MyPlugin>
+          <Table<MarketAPI.MyPlugin>
             rowKey="id"
             dataSource={items}
             pagination={false}
@@ -89,11 +74,17 @@ export default function OwnerPage() {
                 render: (_, r) => (
                   <Space direction="vertical" size={0}>
                     <a onClick={() => history.push(`/plugins/${r.id}`)}>{r.displayName}</a>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>{r.id}</Typography.Text>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      {r.id}
+                    </Typography.Text>
                   </Space>
                 ),
               },
-              { title: '最新版本', dataIndex: 'latestVersion', render: (v) => v ?? <Tag bordered={false}>未发布</Tag> },
+              {
+                title: '最新版本',
+                dataIndex: 'latestVersion',
+                render: (v) => v ?? <Tag bordered={false}>未发布</Tag>,
+              },
               { title: '下载', dataIndex: 'downloads', width: 90 },
               {
                 title: '评分',
@@ -104,13 +95,23 @@ export default function OwnerPage() {
                 title: '状态',
                 width: 110,
                 render: (_, r) =>
-                  r.isUnlisted ? <Tag color="error" bordered={false}>已下架</Tag> : <Tag color="success" bordered={false}>正常</Tag>,
+                  r.isUnlisted ? (
+                    <Tag color="error" bordered={false}>
+                      已下架
+                    </Tag>
+                  ) : (
+                    <Tag color="success" bordered={false}>
+                      正常
+                    </Tag>
+                  ),
               },
               {
                 title: '',
                 width: 90,
                 render: (_, r) => (
-                  <Button type="link" icon={<EditOutlined />} onClick={() => openEditor(r)}>编辑</Button>
+                  <Button type="link" icon={<EditOutlined />} onClick={() => openEditor(r)}>
+                    编辑
+                  </Button>
                 ),
               },
             ]}
@@ -123,7 +124,11 @@ export default function OwnerPage() {
         width={640}
         open={!!editing}
         onClose={() => setEditing(null)}
-        extra={<Button type="primary" onClick={() => form.submit()}>保存</Button>}
+        extra={
+          <Button type="primary" onClick={() => form.submit()}>
+            保存
+          </Button>
+        }
       >
         <Form form={form} layout="vertical" onFinish={save}>
           <Form.Item

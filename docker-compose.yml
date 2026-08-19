@@ -6,36 +6,91 @@
 #   pwsh ./build/Sync-VelaShellSdk.ps1       # 把 VelaShell 的 SDK 包打进 ./packages
 #   cp .env.example .env                     # 改掉 Mongo / MinIO 的默认凭据
 #
-# 端口:API 8080 / 前端 8000 / 统一认证 7020 / MinIO 9000(控制台 9001)/ Mongo 27017 / clamd 3310
+# 端口:API 8080 / 前端 8000 / 统一认证 7020 / MinIO 9000(控制台 9001)/ Mongo 副本集 27017-27019 / clamd 3310
 services:
 
-  mongo:
-    image: mongo:8
-    container_name: market-mongo
+  # MongoDB 副本集(rs0,primary + secondary + arbiter),与 EasilyNET 的
+  # docker-compose.mongo.rs.yml 同一套拓扑。bitnami 镜像在设置了 ROOT 口令时自动开鉴权,
+  # 副本集意味着驱动可以使用事务与变更流。
+  # ADVERTISED_HOSTNAME 用 host.docker.internal:成员地址写进 rs 配置之后,
+  # 容器内(extra_hosts 指到 host-gateway)和宿主机客户端解析到的是同一个地址。
+  mongo_primary:
+    image: bitnami/mongodb:latest
+    container_name: market-mongo-primary
     restart: unless-stopped
-    # 显式开鉴权,而不是依赖"设了 MONGO_INITDB_ROOT_* 就会开"这个副作用 ——
-    # 那个副作用只在数据目录为空时发生,于是老部署升级上来会得到一个**静默不鉴权**的库。
-    # 写在这里,"这个库要口令"就是一句无条件成立的话。
-    command: ["mongod", "--auth"]
     environment:
       - TZ=Asia/Chongqing
-      # 开启鉴权。这两个变量**只在数据目录为空时**生效 —— 已经跑过的部署要补建账号,
+      - MONGODB_ADVERTISED_HOSTNAME=host.docker.internal
+      - MONGODB_REPLICA_SET_MODE=primary
+      - MONGODB_REPLICA_SET_NAME=rs0
+      # 只在数据目录为空时用来创建 root 账号 —— 已经跑过的部署要补建账号,
       # 见 docs/deployment.md "给已有的 MongoDB 补上账号密码"。
-      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USER:-market}
-      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:-change-me-please}
-      - MONGO_INITDB_DATABASE=velashell-market
+      - MONGODB_ROOT_USER=${MONGO_ROOT_USER:-market}
+      - MONGODB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:-change-me-please}
+      - MONGODB_REPLICA_SET_KEY=${MONGO_RS_KEY:-HxplckY2jXSwfDRE}
     ports:
       - "27017:27017"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "gateway.docker.internal:host-gateway"
     volumes:
-      - mongo-data:/data/db
+      - mongodb_master_data:/bitnami/mongodb
     healthcheck:
       # 开了鉴权之后 ping 也要带凭据,否则健康检查永远是 unhealthy,依赖它的服务一个都起不来。
       test:
         - CMD-SHELL
-        - mongosh --quiet -u "$$MONGO_INITDB_ROOT_USERNAME" -p "$$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval "db.adminCommand('ping')"
+        - mongosh --quiet -u "$$MONGODB_ROOT_USER" -p "$$MONGODB_ROOT_PASSWORD" --authenticationDatabase admin --eval "db.adminCommand('ping')"
       interval: 10s
       timeout: 5s
       retries: 12
+
+  mongo_secondary:
+    image: bitnami/mongodb:latest
+    container_name: market-mongo-secondary
+    restart: unless-stopped
+    depends_on:
+      - mongo_primary
+    environment:
+      - TZ=Asia/Chongqing
+      - MONGODB_ADVERTISED_HOSTNAME=host.docker.internal
+      # 必须公告宿主机映射的端口(27018),否则它会公告容器内部端口 27017 ——
+      # 与 primary 的公告地址完全相同,导致它误判"自己已在集群里"而永远加不进去。
+      - MONGODB_ADVERTISED_PORT_NUMBER=27018
+      - MONGODB_REPLICA_SET_MODE=secondary
+      - MONGODB_REPLICA_SET_NAME=rs0
+      - MONGODB_INITIAL_PRIMARY_PORT_NUMBER=27017
+      - MONGODB_INITIAL_PRIMARY_HOST=host.docker.internal
+      - MONGODB_INITIAL_PRIMARY_ROOT_USER=${MONGO_ROOT_USER:-market}
+      - MONGODB_INITIAL_PRIMARY_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:-change-me-please}
+      - MONGODB_REPLICA_SET_KEY=${MONGO_RS_KEY:-HxplckY2jXSwfDRE}
+    ports:
+      - "27018:27017"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "gateway.docker.internal:host-gateway"
+
+  mongo_arbiter:
+    image: bitnami/mongodb:latest
+    container_name: market-mongo-arbiter
+    restart: unless-stopped
+    depends_on:
+      - mongo_primary
+    environment:
+      - TZ=Asia/Chongqing
+      - MONGODB_ADVERTISED_HOSTNAME=host.docker.internal
+      - MONGODB_ADVERTISED_PORT_NUMBER=27019
+      - MONGODB_REPLICA_SET_MODE=arbiter
+      - MONGODB_REPLICA_SET_NAME=rs0
+      - MONGODB_INITIAL_PRIMARY_PORT_NUMBER=27017
+      - MONGODB_INITIAL_PRIMARY_HOST=host.docker.internal
+      - MONGODB_INITIAL_PRIMARY_ROOT_USER=${MONGO_ROOT_USER:-market}
+      - MONGODB_INITIAL_PRIMARY_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:-change-me-please}
+      - MONGODB_REPLICA_SET_KEY=${MONGO_RS_KEY:-HxplckY2jXSwfDRE}
+    ports:
+      - "27019:27017"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "gateway.docker.internal:host-gateway"
 
   minio:
     image: minio/minio:latest
@@ -85,13 +140,15 @@ services:
     container_name: market-identity
     restart: unless-stopped
     depends_on:
-      mongo:
+      mongo_primary:
         condition: service_healthy
     environment:
       - TZ=Asia/Chongqing
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - ASPNETCORE_HTTP_PORTS=8080
-      - ConnectionStrings__Mongo=mongodb://${MONGO_ROOT_USER:-market}:${MONGO_ROOT_PASSWORD:-change-me-please}@mongo:27017/velashell-identity?authSource=admin
+      # 副本集连接串:成员在 rs 配置里公告的是 host.docker.internal,
+      # 所以这里也用它(经 extra_hosts 走 host-gateway),驱动做拓扑发现时地址才对得上。
+      - ConnectionStrings__Mongo=mongodb://${MONGO_ROOT_USER:-market}:${MONGO_ROOT_PASSWORD:-change-me-please}@host.docker.internal:27017,host.docker.internal:27018/velashell-identity?authSource=admin&replicaSet=rs0
       # issuer 必须是**浏览器能打开**的地址:它同时是令牌里的 iss,也是 discovery 里所有端点的前缀。
       # 换成对外域名时,下面 api 的 Auth__Issuer 与 web 的 MARKET_AUTHORITY 要一起改。
       - Identity__Issuer=${IDENTITY_ISSUER:-http://localhost:7020}
@@ -112,6 +169,8 @@ services:
       - identity-keys:/app/keys
     ports:
       - "7020:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   api:
     build:
@@ -120,7 +179,7 @@ services:
     container_name: market-api
     restart: unless-stopped
     depends_on:
-      mongo:
+      mongo_primary:
         condition: service_healthy
       minio:
         condition: service_healthy
@@ -135,7 +194,7 @@ services:
       # (打包 → 落隔离桶 → 静态检查 → 病毒扫描 → 发布),于是首页/下载/检测报告都是真实产物。
       - Market__SeedDemoData=${SEED_DEMO_DATA:-false}
       - ASPNETCORE_HTTP_PORTS=8080
-      - ConnectionStrings__Mongo=mongodb://${MONGO_ROOT_USER:-market}:${MONGO_ROOT_PASSWORD:-change-me-please}@mongo:27017/velashell-market?authSource=admin
+      - ConnectionStrings__Mongo=mongodb://${MONGO_ROOT_USER:-market}:${MONGO_ROOT_PASSWORD:-change-me-please}@host.docker.internal:27017,host.docker.internal:27018/velashell-market?authSource=admin&replicaSet=rs0
       # 用 host.docker.internal 而不是 minio:把预签名 URL 的 host 同时做成
       # 容器内(经 extra_hosts 走 host-gateway)与宿主机浏览器(Docker Desktop 会解析)都能访问。
       - ObjectStorage__Endpoint=http://host.docker.internal:9000
@@ -176,7 +235,7 @@ services:
       - "8000:80"
 
 volumes:
-  mongo-data:
+  mongodb_master_data:
   minio-data:
   clamav-db:
   identity-keys:

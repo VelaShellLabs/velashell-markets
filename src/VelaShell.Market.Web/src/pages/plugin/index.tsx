@@ -1,100 +1,49 @@
-import { useEffect, useState } from 'react';
+import { PluginIcon, SignatureTag } from '@/components';
+import { getMyPlugins } from '@/services/me';
+import { getDownloadUrl, getPlugin } from '@/services/market';
+import { CloudDownloadOutlined } from '@ant-design/icons';
+import { useParams } from '@umijs/max';
 import {
-  App, Alert, Button, Card, Col, Descriptions, Row, Skeleton, Space, Table, Tabs, Tag, Tooltip, Typography, Result,
+  Alert, App, Button, Card, Col, Descriptions, Result, Row, Skeleton, Space, Table, Tabs, Tag, Typography,
 } from 'antd';
-import { CloudDownloadOutlined, SafetyCertificateOutlined, WarningOutlined } from '@ant-design/icons';
-import { useParams } from 'umi';
-import { api, getUser } from '../auth';
-import ReviewSection from '../components/ReviewSection';
-
-type Version = {
-  version: string;
-  apiLevel: number;
-  minHostVersion?: string;
-  hostMode: string;
-  packageSize: number;
-  payloadSha256: string;
-  fileSha256: string;
-  signature: string;
-  releaseNotesHtml: string;
-  publishedAt?: string;
-  downloads: number;
-};
-
-type Detail = {
-  id: string;
-  displayName: string;
-  summary?: string;
-  descriptionHtml: string;
-  author?: string;
-  publisher?: string;
-  tags: string[];
-  homepage?: string;
-  license?: string;
-  downloads: number;
-  ratingAverage: number;
-  ratingCount: number;
-  createdAt: string;
-  updatedAt: string;
-  versions: Version[];
-};
+import { useEffect, useState } from 'react';
+import { getUser } from '@/utils/auth';
+import ReviewSection from './components/ReviewSection';
 
 const formatSize = (bytes: number) =>
   bytes > 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
-/** 签名状态的展示。未签名不是错误,但值得让人看见 —— 它决定了升级时能不能验身份连续性。 */
-function SignatureTag({ state }: { state: string }) {
-  if (state === 'Trusted') {
-    return (
-      <Tooltip title="包带有效签名,升级时可校验发布者身份连续性">
-        <Tag color="success" bordered={false} icon={<SafetyCertificateOutlined />}>已签名</Tag>
-      </Tooltip>
-    );
-  }
-  if (state === 'Untrusted') {
-    return <Tag color="warning" bordered={false} icon={<WarningOutlined />}>自签名</Tag>;
-  }
-  return (
-    <Tooltip title="作者未对该包签名。市场当前允许未签名的包上架">
-      <Tag bordered={false}>未签名</Tag>
-    </Tooltip>
-  );
-}
-
 /** 插件详情页:左侧内容(说明/版本/评价),右侧元信息与下载。 */
-export default function DetailPage() {
+export default function PluginDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const { message } = App.useApp();
-  const [data, setData] = useState<Detail | null>(null);
+  const [data, setData] = useState<MarketAPI.PluginDetail | null>(null);
   const [missing, setMissing] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
-    api(`/plugins/${id}`).then(async (r) => {
-      if (!r.ok) {
-        setMissing(true);
-        return;
-      }
-      setData(await r.json());
-    });
+    getPlugin(id)
+      .then(setData)
+      .catch(() => setMissing(true));
     // 是不是拥有者决定评价区的形态(自己不能评自己)。
     getUser().then(async (user) => {
       if (!user) return;
-      const response = await api('/me/plugins');
-      if (!response.ok) return;
-      const mine: { id: string }[] = await response.json();
-      setIsOwner(mine.some((p) => p.id === id));
+      try {
+        const mine = await getMyPlugins();
+        setIsOwner(mine.some((p) => p.id === id));
+      } catch {
+        setIsOwner(false);
+      }
     });
   }, [id]);
 
   const download = async (version: string) => {
-    const response = await api(`/plugins/${id}/versions/${version}/download`);
-    if (!response.ok) {
+    try {
+      const { url } = await getDownloadUrl(id, version);
+      window.location.href = url;
+    } catch {
       message.error('获取下载地址失败');
-      return;
     }
-    const { url } = await response.json();
-    window.location.href = url;
   };
 
   if (missing) {
@@ -103,7 +52,9 @@ export default function DetailPage() {
   if (!data) {
     return (
       <div className="market-page">
-        <Card><Skeleton active paragraph={{ rows: 8 }} /></Card>
+        <Card>
+          <Skeleton active paragraph={{ rows: 8 }} />
+        </Card>
       </div>
     );
   }
@@ -114,15 +65,28 @@ export default function DetailPage() {
     <div className="market-page">
       <Row gutter={24}>
         <Col xs={24} lg={17}>
-          <Space direction="vertical" size={4} style={{ marginBottom: 20 }}>
-            <Space align="center" wrap>
-              <Typography.Title level={3} style={{ margin: 0 }}>{data.displayName}</Typography.Title>
-              {latest ? <Tag color="blue" bordered={false}>v{latest.version}</Tag> : null}
-              {latest ? <SignatureTag state={latest.signature} /> : null}
-            </Space>
-            <Typography.Text type="secondary">{data.summary}</Typography.Text>
-            <Space size={4} wrap style={{ marginTop: 6 }}>
-              {data.tags?.map((t) => <Tag key={t} bordered={false}>{t}</Tag>)}
+          <Space align="start" size={16} style={{ marginBottom: 20 }}>
+            <PluginIcon id={data.id} name={data.displayName} size={64} />
+            <Space direction="vertical" size={4}>
+              <Space align="center" wrap>
+                <Typography.Title level={3} style={{ margin: 0 }}>
+                  {data.displayName}
+                </Typography.Title>
+                {latest ? (
+                  <Tag color="blue" bordered={false}>
+                    v{latest.version}
+                  </Tag>
+                ) : null}
+                {latest ? <SignatureTag state={latest.signature} /> : null}
+              </Space>
+              <Typography.Text type="secondary">{data.summary}</Typography.Text>
+              <Space size={4} wrap style={{ marginTop: 6 }}>
+                {data.tags?.map((t) => (
+                  <Tag key={t} bordered={false}>
+                    {t}
+                  </Tag>
+                ))}
+              </Space>
             </Space>
           </Space>
 
@@ -142,7 +106,7 @@ export default function DetailPage() {
                   key: 'versions',
                   label: `版本 (${data.versions.length})`,
                   children: (
-                    <Table<Version>
+                    <Table<MarketAPI.Version>
                       rowKey="version"
                       dataSource={data.versions}
                       pagination={false}
@@ -155,7 +119,11 @@ export default function DetailPage() {
                         ),
                       }}
                       columns={[
-                        { title: '版本', dataIndex: 'version', render: (v) => <Typography.Text strong>{v}</Typography.Text> },
+                        {
+                          title: '版本',
+                          dataIndex: 'version',
+                          render: (v) => <Typography.Text strong>{v}</Typography.Text>,
+                        },
                         { title: 'apiLevel', dataIndex: 'apiLevel', width: 92 },
                         { title: '最低宿主版本', dataIndex: 'minHostVersion', render: (v) => v ?? '—' },
                         { title: '宿主模式', dataIndex: 'hostMode', render: (v) => <Tag bordered={false}>{v}</Tag> },
@@ -207,14 +175,20 @@ export default function DetailPage() {
           <Card size="small" title="信息" style={{ marginBottom: 16 }}>
             <Descriptions column={1} size="small" colon={false}>
               <Descriptions.Item label="插件 id">
-                <Typography.Text copyable code style={{ fontSize: 12 }}>{data.id}</Typography.Text>
+                <Typography.Text copyable code style={{ fontSize: 12 }}>
+                  {data.id}
+                </Typography.Text>
               </Descriptions.Item>
               <Descriptions.Item label="作者">{data.author ?? '—'}</Descriptions.Item>
               <Descriptions.Item label="许可证">{data.license ?? '—'}</Descriptions.Item>
               <Descriptions.Item label="主页">
                 {data.homepage ? (
-                  <a href={data.homepage} target="_blank" rel="noreferrer noopener">{data.homepage}</a>
-                ) : '—'}
+                  <a href={data.homepage} target="_blank" rel="noreferrer noopener">
+                    {data.homepage}
+                  </a>
+                ) : (
+                  '—'
+                )}
               </Descriptions.Item>
               <Descriptions.Item label="下载量">{data.downloads}</Descriptions.Item>
               <Descriptions.Item label="评分">
@@ -231,15 +205,29 @@ export default function DetailPage() {
                   type="info"
                   showIcon
                   message="下载后可核对校验和"
-                  description={<span>用 <code>vela-plugin verify</code> 可以一并校验容器完整性与签名。</span>}
+                  description={
+                    <span>
+                      用 <code>vela-plugin verify</code> 可以一并校验容器完整性与签名。
+                    </span>
+                  }
                 />
                 <div>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>载荷 SHA-256</Typography.Text>
-                  <Typography.Paragraph copyable={{ text: latest.payloadSha256 }} style={{ fontSize: 11, wordBreak: 'break-all', marginBottom: 8 }}>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    载荷 SHA-256
+                  </Typography.Text>
+                  <Typography.Paragraph
+                    copyable={{ text: latest.payloadSha256 }}
+                    style={{ fontSize: 11, wordBreak: 'break-all', marginBottom: 8 }}
+                  >
                     {latest.payloadSha256}
                   </Typography.Paragraph>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>整包 SHA-256</Typography.Text>
-                  <Typography.Paragraph copyable={{ text: latest.fileSha256 }} style={{ fontSize: 11, wordBreak: 'break-all', marginBottom: 0 }}>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    整包 SHA-256
+                  </Typography.Text>
+                  <Typography.Paragraph
+                    copyable={{ text: latest.fileSha256 }}
+                    style={{ fontSize: 11, wordBreak: 'break-all', marginBottom: 0 }}
+                  >
                     {latest.fileSha256}
                   </Typography.Paragraph>
                 </div>

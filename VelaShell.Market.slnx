@@ -1,8 +1,9 @@
 <Solution>
   <Folder Name="/build/">
+    <File Path=".env" />
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
-    <File Path="docker-compose.yml" />
+    <File Path="LICENSE.txt" />
     <File Path="nuget.config" />
     <File Path="README.md" />
   </Folder>
@@ -15,4 +16,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/VelaShell.Market.Tests/VelaShell.Market.Tests.csproj" />
   </Folder>
+  <Project Path="docker-compose.dcproj">
+    <Build />
+  </Project>
 </Solution>

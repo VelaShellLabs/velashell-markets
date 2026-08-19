@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { history, useModel } from '@umijs/max';
 import { Button, Result, Spin } from 'antd';
-import { history } from 'umi';
-import { completeLogin } from '../auth';
+import { useEffect, useState } from 'react';
+import { completeLogin } from '@/utils/auth';
 
 /**
- * OIDC 登录回调:用授权码换取令牌后回首页。
+ * OIDC 登录回调:用授权码换取令牌、刷新全局用户状态后回首页。
  *
  * 失败要**显式展示**而不是默默跳回首页 —— 回调失败最常见的原因是
  * redirect_uri 不在认证服务的白名单里,那种情况下静默跳转会让人以为"登录了但没生效",
@@ -12,10 +12,16 @@ import { completeLogin } from '../auth';
  */
 export default function CallbackPage() {
   const [error, setError] = useState<string | null>(null);
+  const { initialState, setInitialState } = useModel('@@initialState');
 
   useEffect(() => {
     completeLogin()
-      .then(() => history.replace('/'))
+      .then(async () => {
+        // 令牌已落地,把 currentUser 灌进全局状态,导航栏立刻变成已登录形态。
+        const currentUser = (await initialState?.fetchUserInfo?.()) ?? null;
+        await setInitialState((s: any) => ({ ...s, currentUser }));
+        history.replace('/');
+      })
       .catch((e: Error) => setError(e.message));
   }, []);
 
@@ -26,7 +32,9 @@ export default function CallbackPage() {
         title="登录未能完成"
         subTitle={error}
         extra={[
-          <Button type="primary" key="home" onClick={() => history.replace('/')}>回到首页</Button>,
+          <Button type="primary" key="home" onClick={() => history.replace('/')}>
+            回到首页
+          </Button>,
         ]}
       >
         <p style={{ color: '#667085' }}>

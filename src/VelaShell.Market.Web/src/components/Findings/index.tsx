@@ -1,19 +1,12 @@
 import { Empty, Space, Tag, Tooltip, Typography } from 'antd';
 
-export type Finding = {
-  code: string;
-  severity: 'Info' | 'Warning' | 'Blocking';
-  message: string;
-  path?: string | null;
-};
-
-const color: Record<Finding['severity'], string> = {
+const color: Record<MarketAPI.Finding['severity'], string> = {
   Blocking: 'error',
   Warning: 'warning',
   Info: 'default',
 };
 
-const label: Record<Finding['severity'], string> = {
+const label: Record<MarketAPI.Finding['severity'], string> = {
   Blocking: '阻断',
   Warning: '待复核',
   Info: '提示',
@@ -39,7 +32,7 @@ export const statusTag: Record<string, { color: string; text: string }> = {
  * 检测发现列表。上传者与审核员看的是同一份 —— 被拒却看不到原因,只会换来一次次盲目重传,
  * 所以这里连 code 都原样展示(它是稳定的机器可读标识,方便按代码搜文档)。
  */
-export default function Findings({ findings }: { findings: Finding[] }) {
+export default function Findings({ findings }: { findings: MarketAPI.Finding[] }) {
   if (!findings || findings.length === 0) {
     return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无检测结果" />;
   }

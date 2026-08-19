@@ -1,15 +1,15 @@
-import { useState } from 'react';
-import { Alert, App, Button, Card, Col, Form, Input, Result, Row, Space, Steps, Typography, Upload } from 'antd';
+import { uploadPackage } from '@/services/uploads';
 import { InboxOutlined } from '@ant-design/icons';
-import { history } from 'umi';
-import { api } from '../auth';
+import { history } from '@umijs/max';
+import { Alert, App, Button, Card, Col, Form, Input, Result, Row, Space, Steps, Typography, Upload } from 'antd';
+import { useState } from 'react';
 
 /** 发布页。上传后包进隔离区,检测结论在「我的上传」里看。 */
 export default function UploadPage() {
   const { message } = App.useApp();
   const [form] = Form.useForm();
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<{ pluginId: string; version: string } | null>(null);
+  const [done, setDone] = useState<MarketAPI.UploadResult | null>(null);
 
   const submit = async (values: any) => {
     const file = values.file?.[0]?.originFileObj;
@@ -24,13 +24,11 @@ export default function UploadPage() {
       body.append('description', values.description ?? '');
       body.append('releaseNotes', values.releaseNotes ?? '');
       body.append('tags', values.tags ?? '');
-      const response = await api('/uploads', { method: 'POST', body });
-      const payload = await response.json().catch(() => ({}));
-      if (response.ok) {
-        setDone({ pluginId: payload.pluginId, version: payload.version });
-      } else {
-        message.error(payload.error ?? payload.detail ?? '上传失败');
-      }
+      const payload = await uploadPackage(body);
+      setDone(payload);
+    } catch (e: any) {
+      const data = e?.response?.data;
+      message.error(data?.error ?? data?.detail ?? '上传失败');
     } finally {
       setBusy(false);
     }
@@ -47,7 +45,13 @@ export default function UploadPage() {
             <Button type="primary" key="mine" onClick={() => history.push('/mine')}>
               查看检测进度
             </Button>,
-            <Button key="again" onClick={() => { setDone(null); form.resetFields(); }}>
+            <Button
+              key="again"
+              onClick={() => {
+                setDone(null);
+                form.resetFields();
+              }}
+            >
               继续上传
             </Button>,
           ]}
@@ -82,7 +86,9 @@ export default function UploadPage() {
                 rules={[{ required: true, message: '请选择 .vpx 包' }]}
               >
                 <Upload.Dragger beforeUpload={() => false} maxCount={1} accept=".vpx">
-                  <p className="ant-upload-drag-icon"><InboxOutlined /></p>
+                  <p className="ant-upload-drag-icon">
+                    <InboxOutlined />
+                  </p>
                   <p className="ant-upload-text">把 .vpx 拖到这里,或点击选择</p>
                   <p className="ant-upload-hint">
                     用 <code>dotnet build -t:PackVpx</code> 或 <code>vela-plugin pack</code> 生成
@@ -120,8 +126,12 @@ export default function UploadPage() {
           />
           <Card size="small" title="几条会被直接拒收的情况">
             <ul style={{ paddingLeft: 18, margin: 0, color: '#475467', lineHeight: 2 }}>
-              <li>把 zip 改成 <code>.vpx</code>(市场只认专属容器)</li>
-              <li>包内含 <code>.exe</code> / <code>.msi</code> 等可直接运行的文件</li>
+              <li>
+                把 zip 改成 <code>.vpx</code>(市场只认专属容器)
+              </li>
+              <li>
+                包内含 <code>.exe</code> / <code>.msi</code> 等可直接运行的文件
+              </li>
               <li>路径逃逸、重名条目、解压炸弹</li>
               <li>清单里的 id / 版本与包不符</li>
               <li>病毒库命中</li>
@@ -129,8 +139,12 @@ export default function UploadPage() {
           </Card>
           <Card size="small" title="不会被拒、但会转人工的情况" style={{ marginTop: 16 }}>
             <ul style={{ paddingLeft: 18, margin: 0, color: '#475467', lineHeight: 2 }}>
-              <li>包内含脚本(<code>.ps1</code> / <code>.sh</code> …)或原生库</li>
-              <li>带了本该由宿主提供的 <code>Avalonia*</code> / <code>PluginSdk</code></li>
+              <li>
+                包内含脚本(<code>.ps1</code> / <code>.sh</code> …)或原生库
+              </li>
+              <li>
+                带了本该由宿主提供的 <code>Avalonia*</code> / <code>PluginSdk</code>
+              </li>
               <li>签名公钥与该插件既往版本不同</li>
             </ul>
           </Card>

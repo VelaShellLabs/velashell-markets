@@ -1,33 +1,15 @@
+import { listPlugins, listTags } from '@/services/market';
+import { TagsOutlined } from '@ant-design/icons';
+import { Card, Col, Empty, Input, Pagination, Row, Segmented, Skeleton, Space, Tag, Typography } from 'antd';
 import { useEffect, useState } from 'react';
-import {
-  Card, Col, Empty, Input, Pagination, Rate, Row, Segmented, Skeleton, Space, Tag, Typography,
-} from 'antd';
-import { DownloadOutlined, TagsOutlined } from '@ant-design/icons';
-import { history } from 'umi';
-import { api } from '../auth';
-
-type PluginSummary = {
-  id: string;
-  displayName: string;
-  summary?: string;
-  excerpt?: string;
-  author?: string;
-  tags: string[];
-  latestVersion?: string;
-  latestApiLevel?: number;
-  downloads: number;
-  ratingAverage: number;
-  ratingCount: number;
-};
-
-type Page = { total: number; page: number; size: number; items: PluginSummary[] };
+import PluginCard from './components/PluginCard';
 
 const SIZE = 12;
 
 /** 浏览页:搜索 + 标签过滤 + 排序 + 分页。 */
-export default function IndexPage() {
-  const [data, setData] = useState<Page | null>(null);
-  const [tags, setTags] = useState<{ tag: string; count: number }[]>([]);
+export default function MarketPage() {
+  const [data, setData] = useState<MarketAPI.PluginPage | null>(null);
+  const [tags, setTags] = useState<MarketAPI.TagCount[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
   const [tag, setTag] = useState<string | undefined>();
@@ -35,19 +17,14 @@ export default function IndexPage() {
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    api('/plugins/tags')
-      .then((r) => r.json())
+    listTags()
       .then(setTags)
       .catch(() => setTags([]));
   }, []);
 
   useEffect(() => {
     setLoading(true);
-    const query = new URLSearchParams({ sort, page: String(page), size: String(SIZE) });
-    if (q) query.set('q', q);
-    if (tag) query.set('tag', tag);
-    api(`/plugins?${query}`)
-      .then((r) => r.json())
+    listPlugins({ q: q || undefined, tag, sort, page, size: SIZE })
       .then(setData)
       .catch(() => setData({ total: 0, page: 1, size: SIZE, items: [] }))
       .finally(() => setLoading(false));
@@ -74,8 +51,17 @@ export default function IndexPage() {
       </div>
 
       <Row gutter={24}>
-        <Col xs={24} md={6}>
-          <Card size="small" title={<Space><TagsOutlined />标签</Space>} style={{ marginBottom: 16 }}>
+        <Col xs={24} md={6} xl={5}>
+          <Card
+            size="small"
+            title={
+              <Space>
+                <TagsOutlined />
+                标签
+              </Space>
+            }
+            style={{ marginBottom: 16 }}
+          >
             {tags.length === 0 ? (
               <Typography.Text type="secondary">暂无标签</Typography.Text>
             ) : (
@@ -97,7 +83,7 @@ export default function IndexPage() {
           </Card>
         </Col>
 
-        <Col xs={24} md={18}>
+        <Col xs={24} md={18} xl={19}>
           <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }} wrap>
             <Typography.Text type="secondary">
               {loading ? '加载中…' : `共 ${data?.total ?? 0} 个插件`}
@@ -116,9 +102,11 @@ export default function IndexPage() {
 
           {loading ? (
             <Row gutter={[16, 16]}>
-              {Array.from({ length: 6 }).map((_, i) => (
-                <Col xs={24} sm={12} xl={8} key={i}>
-                  <Card><Skeleton active paragraph={{ rows: 2 }} /></Card>
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Col xs={24} sm={12} xl={8} xxl={6} key={i}>
+                  <Card>
+                    <Skeleton active paragraph={{ rows: 2 }} />
+                  </Card>
                 </Col>
               ))}
             </Row>
@@ -126,41 +114,13 @@ export default function IndexPage() {
             <>
               <Row gutter={[16, 16]}>
                 {data.items.map((p) => (
-                  <Col xs={24} sm={12} xl={8} key={p.id}>
-                    <Card
-                      className="plugin-card"
-                      hoverable
-                      onClick={() => history.push(`/plugins/${p.id}`)}
-                      styles={{ body: { padding: 16 } }}
-                    >
-                      <Space direction="vertical" size={8} style={{ width: '100%' }}>
-                        <div className="plugin-card-title">
-                          <span className="plugin-card-name">{p.displayName}</span>
-                          <Tag color="blue" bordered={false}>{p.latestVersion}</Tag>
-                        </div>
-                        <div className="plugin-card-summary">{p.summary || p.excerpt || '作者未填写简介'}</div>
-                        <Space size={4} wrap>
-                          {p.tags?.slice(0, 3).map((t) => (
-                            <Tag key={t} bordered={false}>{t}</Tag>
-                          ))}
-                        </Space>
-                        <Space split={<span className="plugin-card-meta">·</span>} size={8}>
-                          <Space size={4}>
-                            <Rate disabled allowHalf value={p.ratingAverage} style={{ fontSize: 12 }} />
-                            <span className="plugin-card-meta">{p.ratingCount}</span>
-                          </Space>
-                          <span className="plugin-card-meta">
-                            <DownloadOutlined /> {p.downloads}
-                          </span>
-                          {p.author ? <span className="plugin-card-meta">{p.author}</span> : null}
-                        </Space>
-                      </Space>
-                    </Card>
+                  <Col xs={24} sm={12} xl={8} xxl={6} key={p.id}>
+                    <PluginCard plugin={p} />
                   </Col>
                 ))}
               </Row>
               <Pagination
-                style={{ marginTop: 24, textAlign: 'center' }}
+                style={{ marginTop: 24 }}
                 align="center"
                 current={data.page}
                 pageSize={data.size}

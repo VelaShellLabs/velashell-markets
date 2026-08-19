@@ -1,34 +1,16 @@
-import { useEffect, useState } from 'react';
-import { Button, Card, Descriptions, Empty, Skeleton, Space, Table, Tag, Typography } from 'antd';
+import { Findings, statusTag, verdictTag } from '@/components';
+import { getMyUploads } from '@/services/uploads';
 import { ReloadOutlined } from '@ant-design/icons';
-import { history } from 'umi';
-import { api } from '../auth';
-import Findings, { statusTag, verdictTag, type Finding } from '../components/Findings';
-
-type Upload = {
-  pluginId: string;
-  version: string;
-  status: string;
-  uploadedAt: string;
-  publishedAt?: string;
-  packageSize: number;
-  signature: string;
-  scan?: {
-    verdict: string;
-    startedAt: string;
-    completedAt?: string;
-    engines: Record<string, string>;
-    findings: Finding[];
-  } | null;
-};
+import { history } from '@umijs/max';
+import { Button, Card, Descriptions, Empty, Skeleton, Space, Table, Tag, Typography } from 'antd';
+import { useEffect, useState } from 'react';
 
 /** 我的上传:检测进度与完整报告。被拒却看不到原因,只会换来盲目重传。 */
 export default function MinePage() {
-  const [items, setItems] = useState<Upload[] | null>(null);
+  const [items, setItems] = useState<MarketAPI.MyUpload[] | null>(null);
 
   const load = () =>
-    api('/uploads/mine')
-      .then((r) => r.json())
+    getMyUploads()
       .then(setItems)
       .catch(() => setItems([]));
 
@@ -39,24 +21,34 @@ export default function MinePage() {
   return (
     <div className="market-page">
       <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 20 }}>
-        <Typography.Title level={3} style={{ margin: 0 }}>我的上传</Typography.Title>
+        <Typography.Title level={3} style={{ margin: 0 }}>
+          我的上传
+        </Typography.Title>
         <Space>
-          <Button icon={<ReloadOutlined />} onClick={load}>刷新</Button>
-          <Button type="primary" onClick={() => history.push('/upload')}>发布新版本</Button>
+          <Button icon={<ReloadOutlined />} onClick={load}>
+            刷新
+          </Button>
+          <Button type="primary" onClick={() => history.push('/upload')}>
+            发布新版本
+          </Button>
         </Space>
       </Space>
 
       {items === null ? (
-        <Card><Skeleton active paragraph={{ rows: 5 }} /></Card>
+        <Card>
+          <Skeleton active paragraph={{ rows: 5 }} />
+        </Card>
       ) : items.length === 0 ? (
         <Card>
           <Empty description="还没有上传过插件">
-            <Button type="primary" onClick={() => history.push('/upload')}>发布第一个</Button>
+            <Button type="primary" onClick={() => history.push('/upload')}>
+              发布第一个
+            </Button>
           </Empty>
         </Card>
       ) : (
         <Card styles={{ body: { padding: 0 } }}>
-          <Table<Upload>
+          <Table<MarketAPI.MyUpload>
             rowKey={(r) => `${r.pluginId}@${r.version}`}
             dataSource={items}
             pagination={false}
@@ -79,7 +71,11 @@ export default function MinePage() {
                 width: 110,
                 render: (s: string) => {
                   const t = statusTag[s] ?? { color: 'default', text: s };
-                  return <Tag color={t.color} bordered={false}>{t.text}</Tag>;
+                  return (
+                    <Tag color={t.color} bordered={false}>
+                      {t.text}
+                    </Tag>
+                  );
                 },
               },
               {
@@ -89,10 +85,19 @@ export default function MinePage() {
                   const v = r.scan?.verdict;
                   if (!v) return '—';
                   const t = verdictTag[v] ?? { color: 'default', text: v };
-                  return <Tag color={t.color} bordered={false}>{t.text}</Tag>;
+                  return (
+                    <Tag color={t.color} bordered={false}>
+                      {t.text}
+                    </Tag>
+                  );
                 },
               },
-              { title: '签名', dataIndex: 'signature', width: 100, render: (v) => <Tag bordered={false}>{v}</Tag> },
+              {
+                title: '签名',
+                dataIndex: 'signature',
+                width: 100,
+                render: (v) => <Tag bordered={false}>{v}</Tag>,
+              },
               {
                 title: '上传时间',
                 dataIndex: 'uploadedAt',
@@ -111,7 +116,9 @@ export default function MinePage() {
                     </Descriptions.Item>
                     <Descriptions.Item label="引擎">
                       {r.scan?.engines
-                        ? Object.entries(r.scan.engines).map(([k, v]) => `${k} ${v}`).join(' · ')
+                        ? Object.entries(r.scan.engines)
+                            .map(([k, v]) => `${k} ${v}`)
+                            .join(' · ')
                         : '—'}
                     </Descriptions.Item>
                   </Descriptions>
