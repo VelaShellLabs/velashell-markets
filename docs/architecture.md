@@ -3,6 +3,8 @@
 ## 分层
 
 ```
+VelaShell.Market.Identity       统一认证(OpenIddict + MongoDB):签令牌、账号与注册
+        ╎ 只经 OIDC 协议往来:签名的 JWT + 一份 JWKS,没有任何代码依赖
 VelaShell.Market.Api            最小 API、OIDC 资源服务器、Markdown 渲染、审核台
         │
 VelaShell.Market.Infrastructure Mongo 上下文与索引、S3 存储、ClamAV、检测流水线
@@ -11,6 +13,10 @@ VelaShell.Market.Domain         实体与状态机(不依赖任何基础设施)
         │
 VelaShell.PluginSdk             .vpx 容器与 plugin.json —— 与宿主同一份实现
 ```
+
+认证服务与市场之间那条虚线是刻意的:两边**没有项目引用**,只共享一个 `sub` 字符串和
+一份公钥。市场至今没有一行代码知道口令长什么样,认证服务也不知道插件是什么。
+换掉任意一边(比如接企业既有的 IdP)只需要改配置里的 issuer。
 
 ## 集合
 

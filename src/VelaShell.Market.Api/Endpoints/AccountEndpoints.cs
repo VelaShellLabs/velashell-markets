@@ -63,7 +63,7 @@ public static class PrincipalExtensions
 {
     /// <summary>
     /// 取身份主体。OIDC 的 <c>sub</c> 在 ASP.NET 里常被映射成 <see cref="ClaimTypes.NameIdentifier" />,
-    /// 两个都看一遍 —— 只认一个的话,换一次 IdentityServer 的声明映射就会让全站的归属判断失效。
+    /// 两个都看一遍 —— 只认一个的话,换一次认证服务的声明映射就会让全站的归属判断失效。
     /// </summary>
     public static string Subject(this ClaimsPrincipal user) =>
         user.FindFirstValue("sub")

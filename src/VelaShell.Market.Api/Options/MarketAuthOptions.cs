@@ -8,17 +8,29 @@ public static class MarketPolicies
 }
 
 /// <summary>
-/// 市场对接 EasilyNET.IdentityServer 的配置。市场是**资源服务器**:不发令牌,只验令牌。
+/// 市场对接统一认证服务的配置。市场是**资源服务器**:不发令牌,只验令牌。
 /// </summary>
 public sealed class MarketAuthOptions
 {
     /// <summary>配置节名。</summary>
     public const string SectionName = "Auth";
 
-    /// <summary>IdentityServer 的 issuer,如 <c>https://localhost:7020</c>。discovery 与 JWKS 都从它推导。</summary>
-    public string Authority { get; set; } = "https://localhost:7020";
+    /// <summary>
+    /// 令牌里 <c>iss</c> 的值,也就是认证服务对外宣称的身份。
+    /// 它必须与认证服务的 <c>Identity:Issuer</c> 一模一样,差一个斜杠都会让所有请求变成 401。
+    /// </summary>
+    public string Issuer { get; set; } = "http://localhost:7020";
 
-    /// <summary>本 API 的受众标识(IdentityServer 里注册的 API 资源名)。留空则不校验 aud。</summary>
+    /// <summary>
+    /// 拉 discovery 与 JWKS 用的地址。留空表示与 <see cref="Issuer" /> 相同。
+    ///
+    /// 只有在"浏览器看到的地址"与"API 能访问到的地址"不是同一个时才需要单独设 ——
+    /// compose 里就是这种情况:浏览器走 <c>http://localhost:7020</c>,而 API 在容器内
+    /// 只能走服务名 <c>http://identity:8080</c>。两者都指同一个服务,签发者仍以 Issuer 为准。
+    /// </summary>
+    public string Authority { get; set; } = "";
+
+    /// <summary>本 API 的受众标识(认证服务里那个 scope 的资源名)。留空则不校验 aud。</summary>
     public string Audience { get; set; } = "velashell-market";
 
     /// <summary>是否要求 metadata 走 HTTPS。**生产环境必须为 true**;开发环境对自签证书可临时关掉。</summary>
@@ -26,7 +38,7 @@ public sealed class MarketAuthOptions
 
     /// <summary>
     /// 审核员的身份主体(<c>sub</c>)列表。市场的管理员是市场自己的概念,
-    /// 不要求对方 IdentityServer 为我们维护角色声明。
+    /// 不要求认证服务为我们维护一套角色声明。
     /// </summary>
     public string[] ModeratorSubjects { get; set; } = [];
 

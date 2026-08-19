@@ -6,4 +6,6 @@
 **/bin/
 **/node_modules/
 .env
+# 本机跑认证服务时生成的签名密钥,绝不能烤进镜像。
+src/VelaShell.Market.Identity/keys/
 *.user

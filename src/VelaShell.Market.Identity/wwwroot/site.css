@@ -1,0 +1,134 @@
+/* 认证页的样式。刻意和插件市场共用一套色板(主色 #4f46e5),
+   让用户从商店跳过来的时候认得出这是同一家的页面,而不是像被钓鱼到了别处。 */
+
+:root {
+    --brand: #4f46e5;
+    --brand-dark: #4338ca;
+    --ink: #1f2430;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --bg: #f5f6fa;
+    --danger: #dc2626;
+    --danger-bg: #fef2f2;
+    --ok: #047857;
+    --ok-bg: #ecfdf5;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    padding: 48px 16px;
+    min-height: 100vh;
+    background: radial-gradient(1200px 600px at 50% -200px, #e8e9fb 0%, var(--bg) 60%);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.shell { max-width: 420px; margin: 0 auto; }
+
+.brand { text-align: center; margin-bottom: 24px; }
+.brand-mark {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: .5px;
+    color: var(--brand);
+    text-decoration: none;
+}
+.brand-sub { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+
+.card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 28px;
+    box-shadow: 0 12px 32px -18px rgba(31, 36, 48, .35);
+}
+
+h1 { margin: 0 0 4px; font-size: 19px; font-weight: 600; }
+.lede { margin: 0 0 20px; color: var(--muted); }
+
+label { display: block; margin-bottom: 14px; }
+label > span { display: block; margin-bottom: 5px; font-weight: 500; }
+
+input[type="text"], input[type="password"], input[type="email"] {
+    width: 100%;
+    padding: 9px 11px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--ink);
+    background: #fff;
+    transition: border-color .15s, box-shadow .15s;
+}
+input:focus {
+    outline: none;
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, .15);
+}
+
+.check { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; color: var(--muted); }
+.check input { margin: 0; accent-color: var(--brand); }
+
+button {
+    width: 100%;
+    padding: 10px 14px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--brand);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background .15s;
+}
+button:hover { background: var(--brand-dark); }
+
+.alt { margin: 18px 0 0; text-align: center; color: var(--muted); }
+a { color: var(--brand); }
+
+.notice {
+    margin: 0 0 18px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    font-size: 13px;
+}
+.notice.error { background: var(--danger-bg); border-color: #fecaca; color: var(--danger); }
+.notice.ok { background: var(--ok-bg); border-color: #a7f3d0; color: var(--ok); }
+
+.field-error { display: block; margin-top: 4px; color: var(--danger); font-size: 12px; }
+
+.kv { margin: 0 0 18px; padding: 0; list-style: none; }
+.kv li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.kv li:last-child { border-bottom: 0; }
+.kv .k { color: var(--muted); flex: none; }
+.kv .v { text-align: right; word-break: break-all; }
+code {
+    font-family: ui-monospace, SFMono-Regular, "Cascadia Code", Consolas, monospace;
+    font-size: 12.5px;
+    background: #f3f4f6;
+    padding: 1px 5px;
+    border-radius: 4px;
+}
+
+.foot { margin: 20px auto 0; max-width: 420px; text-align: center; color: var(--muted); font-size: 12px; }
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --ink: #e5e7eb;
+        --muted: #9aa1ad;
+        --line: #2b3040;
+        --bg: #14161d;
+    }
+    body { background: radial-gradient(1200px 600px at 50% -200px, #23264a 0%, var(--bg) 60%); }
+    .card { background: #1b1e28; }
+    input[type="text"], input[type="password"], input[type="email"] { background: #14161d; color: var(--ink); }
+    code { background: #14161d; }
+    .notice.error { background: #2a1618; border-color: #5b2326; color: #fca5a5; }
+    .notice.ok { background: #10251d; border-color: #1f5c46; color: #6ee7b7; }
+}

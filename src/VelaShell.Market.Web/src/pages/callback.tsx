@@ -7,7 +7,7 @@ import { completeLogin } from '../auth';
  * OIDC 登录回调:用授权码换取令牌后回首页。
  *
  * 失败要**显式展示**而不是默默跳回首页 —— 回调失败最常见的原因是
- * redirect_uri 没在 IdentityServer 上注册,那种情况下静默跳转会让人以为"登录了但没生效",
+ * redirect_uri 不在认证服务的白名单里,那种情况下静默跳转会让人以为"登录了但没生效",
  * 排查方向完全错。
  */
 export default function CallbackPage() {
@@ -30,8 +30,8 @@ export default function CallbackPage() {
         ]}
       >
         <p style={{ color: '#667085' }}>
-          最常见的原因是本站的 redirect_uri 没有注册到 IdentityServer 上。
-          注册方式见仓库文档 <code>docs/identity-integration.md</code>。
+          最常见的原因是本站的 redirect_uri 不在认证服务的白名单里(它由 <code>WEB_ORIGIN</code> 决定)。
+          配置方式见仓库文档 <code>docs/identity-integration.md</code>。
         </p>
       </Result>
     );

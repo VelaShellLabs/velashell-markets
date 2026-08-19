@@ -6,8 +6,12 @@ dist/
 .umi-production/
 packages/*.nupkg
 .env
+# 令牌签名/加密密钥。本机跑认证服务时会生成在项目目录下,提交上去等于把签发身份公开。
+src/VelaShell.Market.Identity/keys/
+*.key
 *.user
 .vs/
 .idea/
 TestResults/
 /.omo/*
+.omc

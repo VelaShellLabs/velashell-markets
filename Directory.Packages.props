@@ -20,6 +20,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- 统一认证服务(VelaShell.Market.Identity)的 OIDC 实现。
+         7.6.0 是稳定版,包里带 net10.0 目标框架 —— net11 共享框架向前兼容,能直接用;
+         认证服务是整个市场的信任根,这里刻意不跟 8.0 的 preview。 -->
+    <PackageVersion Include="OpenIddict.AspNetCore" Version="7.6.0" />
+    <PackageVersion Include="OpenIddict.MongoDb" Version="7.6.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageVersion Include="MongoDB.Driver" Version="3.11.0" />
     <!-- 对象存储走 S3 协议(MinIO 兼容),不绑定 MinIO 自家 SDK:
          将来换 S3/OSS/COS 只改配置里的 Endpoint 与凭据。 -->

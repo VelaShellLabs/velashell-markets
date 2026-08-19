@@ -2,6 +2,11 @@
 
 匿名可读、登录可写、审核台另需名单。完整定义在开发环境的 `/swagger`。
 
+需登录的接口要在请求头带 `Authorization: Bearer <access_token>`,令牌由统一认证服务签发
+(授权码 + PKCE,见 [identity-integration.md](identity-integration.md))。协议端点本身
+(`/connect/authorize`、`/connect/token`、`/connect/userinfo`、`/connect/endsession`)
+在认证服务上,不在这个 API 里。
+
 ## 公开(无需登录)
 
 | 方法 | 路径 | 说明 |

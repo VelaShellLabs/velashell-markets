@@ -10,5 +10,12 @@ RUN npm run build
 
 FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# 放进 templates/ 而不是 conf.d/:nginx 镜像启动时会对 templates 里的文件跑一遍 envsubst,
+# 把下面这两个变量替换进去,再输出到 /etc/nginx/conf.d/default.conf。
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
+# 认证服务的地址与客户端 id。compose 会覆盖,这里的默认值保证单独 docker run 也能起。
+# 只替换 MARKET_ 开头的变量,免得 nginx 自己的 $uri、$host 之类被误伤。
+ENV MARKET_AUTHORITY=http://localhost:7020 \
+    MARKET_CLIENT_ID=velashell-market-web \
+    NGINX_ENVSUBST_FILTER=^MARKET_
 EXPOSE 80

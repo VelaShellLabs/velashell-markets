@@ -1,0 +1,51 @@
+@page "/account/register"
+@model RegisterModel
+@{
+    ViewData["Title"] = "注册";
+}
+
+<h1>注册</h1>
+<p class="lede">一个账号通吃插件市场的上传、评价与审核。</p>
+
+@if (!Model.AllowRegistration)
+{
+    <p class="notice error">本站已关闭自助注册,请联系管理员开通账号。</p>
+}
+else
+{
+    @if (!string.IsNullOrEmpty(Model.Error))
+    {
+        <p class="notice error">@Model.Error</p>
+    }
+
+    <form method="post">
+        <input type="hidden" asp-for="ReturnUrl" />
+        <label>
+            <span>用户名</span>
+            <input asp-for="Input.UserName" autocomplete="username" autofocus required />
+            <span asp-validation-for="Input.UserName" class="field-error"></span>
+        </label>
+        <label>
+            <span>显示名(可留空)</span>
+            <input asp-for="Input.DisplayName" autocomplete="nickname" />
+        </label>
+        <label>
+            <span>邮箱(可留空)</span>
+            <input asp-for="Input.Email" type="email" autocomplete="email" />
+            <span asp-validation-for="Input.Email" class="field-error"></span>
+        </label>
+        <label>
+            <span>口令</span>
+            <input asp-for="Input.Password" type="password" autocomplete="new-password" required />
+            <span asp-validation-for="Input.Password" class="field-error"></span>
+        </label>
+        <label>
+            <span>再输一次</span>
+            <input asp-for="Input.ConfirmPassword" type="password" autocomplete="new-password" required />
+            <span asp-validation-for="Input.ConfirmPassword" class="field-error"></span>
+        </label>
+        <button type="submit">注册并登录</button>
+    </form>
+}
+
+<p class="alt">已经有账号了?<a asp-page="/Account/Login" asp-route-returnUrl="@Model.ReturnUrl">去登录</a></p>

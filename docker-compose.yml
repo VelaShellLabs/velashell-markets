@@ -1,27 +1,38 @@
 # VelaShell 插件市场的完整编排。
 #
-#   docker compose up -d                     # 数据库 + 对象存储 + 病毒引擎 + API + 前端
-#   docker compose --profile identity up -d  # 再带上 EasilyNET.IdentityServer(从同级仓库构建)
+#   docker compose up -d          # 数据库 + 对象存储 + 病毒引擎 + 统一认证 + API + 前端
 #
 # 一次性准备(SDK 还没发到 nuget.org 之前):
 #   pwsh ./build/Sync-VelaShellSdk.ps1       # 把 VelaShell 的 SDK 包打进 ./packages
+#   cp .env.example .env                     # 改掉 Mongo / MinIO 的默认凭据
 #
-# 端口:API 8080 / 前端 8000 / MinIO 9000(控制台 9001)/ Mongo 27017 / clamd 3310
+# 端口:API 8080 / 前端 8000 / 统一认证 7020 / MinIO 9000(控制台 9001)/ Mongo 27017 / clamd 3310
 services:
 
   mongo:
     image: mongo:8
     container_name: market-mongo
     restart: unless-stopped
+    # 显式开鉴权,而不是依赖"设了 MONGO_INITDB_ROOT_* 就会开"这个副作用 ——
+    # 那个副作用只在数据目录为空时发生,于是老部署升级上来会得到一个**静默不鉴权**的库。
+    # 写在这里,"这个库要口令"就是一句无条件成立的话。
+    command: ["mongod", "--auth"]
     environment:
       - TZ=Asia/Chongqing
+      # 开启鉴权。这两个变量**只在数据目录为空时**生效 —— 已经跑过的部署要补建账号,
+      # 见 docs/deployment.md "给已有的 MongoDB 补上账号密码"。
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USER:-market}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:-change-me-please}
       - MONGO_INITDB_DATABASE=velashell-market
     ports:
       - "27017:27017"
     volumes:
       - mongo-data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      # 开了鉴权之后 ping 也要带凭据,否则健康检查永远是 unhealthy,依赖它的服务一个都起不来。
+      test:
+        - CMD-SHELL
+        - mongosh --quiet -u "$$MONGO_INITDB_ROOT_USERNAME" -p "$$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval "db.adminCommand('ping')"
       interval: 10s
       timeout: 5s
       retries: 12
@@ -66,6 +77,42 @@ services:
       retries: 20
       start_period: 300s
 
+  # 统一认证服务(OpenIddict + MongoDB)。商店点"登录"就跳到它,登录完再跳回商店。
+  identity:
+    build:
+      context: .
+      dockerfile: build/identity.Dockerfile
+    container_name: market-identity
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      - TZ=Asia/Chongqing
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
+      - ASPNETCORE_HTTP_PORTS=8080
+      - ConnectionStrings__Mongo=mongodb://${MONGO_ROOT_USER:-market}:${MONGO_ROOT_PASSWORD:-change-me-please}@mongo:27017/velashell-identity?authSource=admin
+      # issuer 必须是**浏览器能打开**的地址:它同时是令牌里的 iss,也是 discovery 里所有端点的前缀。
+      # 换成对外域名时,下面 api 的 Auth__Issuer 与 web 的 MARKET_AUTHORITY 要一起改。
+      - Identity__Issuer=${IDENTITY_ISSUER:-http://localhost:7020}
+      - Identity__RequireHttps=${IDENTITY_REQUIRE_HTTPS:-false}
+      - Identity__KeyDirectory=/app/keys
+      # 前端客户端的回跳白名单。不在名单里的 redirect_uri 会被直接拒绝,这是防钓鱼的第一道闸。
+      - Identity__Clients__0__ClientId=velashell-market-web
+      - Identity__Clients__0__DisplayName=VelaShell 插件市场
+      - Identity__Clients__0__RedirectUris__0=${WEB_ORIGIN:-http://localhost:8000}/callback
+      - Identity__Clients__0__PostLogoutRedirectUris__0=${WEB_ORIGIN:-http://localhost:8000}
+      - Identity__Clients__0__Scopes__0=velashell-market
+      - Accounts__AllowSelfRegistration=${ALLOW_SELF_REGISTRATION:-true}
+      # 首个账号:只在账号集合为空时创建。留空则去 /account/register 自助注册。
+      - Accounts__Bootstrap__UserName=${BOOTSTRAP_USER:-}
+      - Accounts__Bootstrap__Password=${BOOTSTRAP_PASSWORD:-}
+    volumes:
+      # 签名与加密密钥。丢了等于换签发者:所有已发出的令牌一起失效,所有人被登出。
+      - identity-keys:/app/keys
+    ports:
+      - "7020:8080"
+
   api:
     build:
       context: .
@@ -79,6 +126,8 @@ services:
         condition: service_healthy
       clamav:
         condition: service_started
+      identity:
+        condition: service_started
     environment:
       - TZ=Asia/Chongqing
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
@@ -86,7 +135,7 @@ services:
       # (打包 → 落隔离桶 → 静态检查 → 病毒扫描 → 发布),于是首页/下载/检测报告都是真实产物。
       - Market__SeedDemoData=${SEED_DEMO_DATA:-false}
       - ASPNETCORE_HTTP_PORTS=8080
-      - ConnectionStrings__Mongo=mongodb://mongo:27017/velashell-market
+      - ConnectionStrings__Mongo=mongodb://${MONGO_ROOT_USER:-market}:${MONGO_ROOT_PASSWORD:-change-me-please}@mongo:27017/velashell-market?authSource=admin
       # 用 host.docker.internal 而不是 minio:把预签名 URL 的 host 同时做成
       # 容器内(经 extra_hosts 走 host-gateway)与宿主机浏览器(Docker Desktop 会解析)都能访问。
       - ObjectStorage__Endpoint=http://host.docker.internal:9000
@@ -94,12 +143,15 @@ services:
       - ObjectStorage__SecretKey=${MINIO_ROOT_PASSWORD:-minioadmin}
       - ClamAv__Host=clamav
       - ClamAv__Port=3310
-      # 认证:默认指向同级仓库跑起来的 IdentityServer。用 identity profile 时改成 http://identity:8080。
-      - Auth__Authority=${AUTH_AUTHORITY:-https://host.docker.internal:7020}
+      # 认证:Issuer 是令牌里的 iss(浏览器看到的地址),Authority 是 API 在容器网络里
+      # 真正能访问到的地址。两者指的是同一个服务,详见 docs/identity-integration.md。
+      - Auth__Issuer=${IDENTITY_ISSUER:-http://localhost:7020}
+      - Auth__Authority=http://identity:8080
       - Auth__Audience=${AUTH_AUDIENCE:-velashell-market}
       - Auth__RequireHttpsMetadata=${AUTH_REQUIRE_HTTPS:-false}
       - Auth__AllowedOrigins__0=${WEB_ORIGIN:-http://localhost:8000}
-      # 审核员的 sub。留空则审核台没人进得去 —— 那时"需人工复核"的包会一直停在隔离区,这是安全的默认。
+      # 审核员的 sub(就是认证服务首页显示的那串)。留空则审核台没人进得去 ——
+      # 那时"需人工复核"的包会一直停在隔离区,这是安全的默认。
       - Auth__ModeratorSubjects__0=${MODERATOR_SUBJECT:-}
     ports:
       - "8080:8080"
@@ -116,41 +168,15 @@ services:
       - api
     environment:
       - TZ=Asia/Chongqing
+      # nginx 启动时把这两个值注入页面,前端据此发起 OIDC 登录。
+      # 同一份构建产物因此能对接不同环境的认证服务,不必为换个地址重新打包。
+      - MARKET_AUTHORITY=${IDENTITY_ISSUER:-http://localhost:7020}
+      - MARKET_CLIENT_ID=velashell-market-web
     ports:
       - "8000:80"
-
-  # 可选:直接从同级的 EasilyNET.IdentityServer 仓库构建并跑起来。
-  # 不用它的话(比如你在 VS 里跑),把 AUTH_AUTHORITY 指向你自己的地址即可。
-  identity:
-    profiles: ["identity"]
-    build:
-      context: ../EasilyNET.IdentityServer
-      dockerfile_inline: |
-        FROM mcr.microsoft.com/dotnet/nightly/sdk:11.0-preview AS build
-        WORKDIR /src
-        COPY . .
-        RUN dotnet publish src/EasilyNET.IdentityServer.Host/EasilyNET.IdentityServer.Host.csproj \
-            -c Release -f net11.0 -o /app --nologo
-        FROM mcr.microsoft.com/dotnet/nightly/aspnet:11.0-preview
-        WORKDIR /app
-        COPY --from=build /app .
-        ENV ASPNETCORE_HTTP_PORTS=8080
-        EXPOSE 8080
-        ENTRYPOINT ["dotnet", "EasilyNET.IdentityServer.Host.dll"]
-    container_name: market-identity
-    restart: unless-stopped
-    environment:
-      - TZ=Asia/Chongqing
-      - ASPNETCORE_ENVIRONMENT=Development
-      # Issuer 用浏览器可访问的地址:前端 oidc-client-ts 从 discovery 文档读取所有端点,
-      # 如果issuer是内部地址(http://identity:8080),浏览器无法解析该主机名。
-      # API 侧通过 ValidIssuer 显式覆盖 issuer 校验,所以这里不影响后端验签。
-      - IdentityServer__Issuer=http://localhost:7020
-      - IdentityServer__RequireHttpsForOAuth=false
-    ports:
-      - "7020:8080"
 
 volumes:
   mongo-data:
   minio-data:
   clamav-db:
+  identity-keys:

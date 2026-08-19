@@ -16,7 +16,7 @@ public sealed class Plugin
     [BsonId(IdGenerator = typeof(StringObjectIdGenerator))]
     public required string Id { get; set; }
 
-    /// <summary>拥有者的身份主体(IdentityServer 的 <c>sub</c>)。只有它能发新版本。</summary>
+    /// <summary>拥有者的身份主体(统一认证服务签发的 <c>sub</c>)。只有它能发新版本。</summary>
     public required string OwnerSubject { get; set; }
 
     /// <summary>拥有者展示名(登录时的 name/preferred_username,仅用于展示)。</summary>

@@ -1,0 +1,17 @@
+@page "/error"
+@model ErrorModel
+@{
+    ViewData["Title"] = "出错了";
+}
+
+<h1>@Model.Title</h1>
+<p class="lede">@Model.Description</p>
+
+@if (!string.IsNullOrEmpty(Model.Error))
+{
+    <ul class="kv">
+        <li><span class="k">错误码</span><span class="v"><code>@Model.Error</code></span></li>
+    </ul>
+}
+
+<p class="alt"><a href="/">回到统一认证首页</a></p>

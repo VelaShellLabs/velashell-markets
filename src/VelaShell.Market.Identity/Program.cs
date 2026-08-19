@@ -1,0 +1,167 @@
+using System.Text.Encodings.Web;
+using System.Text.Unicode;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.WebEncoders;
+using MongoDB.Driver;
+using Serilog;
+using static OpenIddict.Abstractions.OpenIddictConstants;
+using VelaShell.Market.Identity.Accounts;
+using VelaShell.Market.Identity.Endpoints;
+using VelaShell.Market.Identity.Options;
+using VelaShell.Market.Identity.Security;
+using VelaShell.Market.Identity.Seeding;
+
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog((context, config) => config.ReadFrom.Configuration(context.Configuration).WriteTo.Console());
+
+// ---- 配置 -------------------------------------------------------------------
+builder.Services.Configure<IdentityServerOptions>(builder.Configuration.GetSection(IdentityServerOptions.SectionName));
+builder.Services.Configure<AccountOptions>(builder.Configuration.GetSection(AccountOptions.SectionName));
+IdentityServerOptions server = builder.Configuration.GetSection(IdentityServerOptions.SectionName)
+                                      .Get<IdentityServerOptions>() ?? new();
+
+// ---- 数据 --------------------------------------------------------------------
+// 账号与 OpenIddict 自己的四个集合(applications / scopes / authorizations / tokens)同库。
+string connectionString = builder.Configuration.GetConnectionString("Mongo")
+                          ?? "mongodb://localhost:27017/velashell-identity";
+MongoUrl mongoUrl = MongoUrl.Create(connectionString);
+string databaseName = string.IsNullOrEmpty(mongoUrl.DatabaseName) ? "velashell-identity" : mongoUrl.DatabaseName;
+builder.Services.AddSingleton<IMongoClient>(_ => new MongoClient(mongoUrl));
+builder.Services.AddSingleton(provider => provider.GetRequiredService<IMongoClient>().GetDatabase(databaseName));
+builder.Services.AddScoped<AccountStore>();
+
+// ---- 签名与加密密钥 ----------------------------------------------------------
+// 在容器建好之前就要准备好:OpenIddict 的服务端配置需要密钥实例。
+// 用一个临时的日志工厂,因为此刻 Serilog 还没接管。
+TokenKeyProvider keys;
+using (ILoggerFactory bootstrap = LoggerFactory.Create(logging => logging.AddSimpleConsole()))
+{
+    keys = new(server.KeyDirectory, bootstrap.CreateLogger<TokenKeyProvider>());
+}
+builder.Services.AddSingleton(keys);
+
+// 数据保护密钥(会话 cookie 与登录表单的防伪令牌都靠它加密)也放进同一个目录。
+// 默认位置在容器内,容器一重建就换一套:表现为所有人被登出,而且**正停在登录页的人
+// 会拿到一个看不懂的防伪校验失败** —— 那张表单是用上一套密钥签的。
+// SetApplicationName 固定下来,免得换个部署路径又变出一套隔离的密钥环。
+builder.Services.AddDataProtection()
+       .PersistKeysToFileSystem(new(Path.Combine(Path.GetFullPath(server.KeyDirectory), "dataprotection")))
+       .SetApplicationName("velashell-market-identity");
+
+// ---- 会话:登录页与授权端点之间靠它串起来 --------------------------------------
+// 这个 cookie 只属于认证服务自己(它与市场前端不同源),回答的是"这台浏览器上是谁登录着",
+// 授权端点据此决定要不要弹登录页。它不是访问市场 API 的凭据 —— 那是访问令牌的事。
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+       .AddCookie(options =>
+       {
+           options.LoginPath = "/account/login";
+           options.LogoutPath = "/connect/endsession";
+           options.AccessDeniedPath = "/account/login";
+           options.ExpireTimeSpan = TimeSpan.FromDays(14);
+           options.SlidingExpiration = true;
+           options.Cookie.Name = "velashell.identity";
+           options.Cookie.HttpOnly = true;
+           options.Cookie.SameSite = SameSiteMode.Lax;
+           // 生产是 HTTPS,cookie 就该只走 HTTPS;本机跑 http://localhost 时 Always 会让 cookie 根本发不出去。
+           options.Cookie.SecurePolicy = server.RequireHttps ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
+       });
+builder.Services.AddAuthorization();
+
+// ---- OpenIddict --------------------------------------------------------------
+builder.Services.AddOpenIddict()
+       .AddCore(options => options.UseMongoDb())
+       .AddServer(options =>
+       {
+           // issuer 决定 discovery 文档里所有端点的 URL,也决定令牌里的 iss。
+           // 它必须是**浏览器与资源服务器都能访问到**的地址,详见 docs/identity-integration.md。
+           options.SetIssuer(new Uri(server.Issuer, UriKind.Absolute));
+
+           options.SetAuthorizationEndpointUris("connect/authorize")
+                  .SetTokenEndpointUris("connect/token")
+                  .SetUserInfoEndpointUris("connect/userinfo")
+                  .SetEndSessionEndpointUris("connect/endsession");
+
+           // 只开授权码 + 刷新令牌。隐式流早就不该再用;口令流会让第三方页面直接碰到用户口令。
+           options.AllowAuthorizationCodeFlow()
+                  .AllowRefreshTokenFlow()
+                  .RequireProofKeyForCodeExchange();
+
+           // 标准 scope 也要登记:OpenIddict 会逐个校验请求里的 scope 是否被认得,
+           // 只有 openid 与 offline_access 是协议内置的。少登记 profile/email 的话,
+           // 前端一发起登录就会被回一个 invalid_scope。
+           options.RegisterScopes([
+               Scopes.Profile,
+               Scopes.Email,
+               .. server.Scopes.Select(static s => s.Name).Where(static n => !string.IsNullOrWhiteSpace(n))
+           ]);
+
+           options.SetAccessTokenLifetime(server.AccessTokenLifetime)
+                  .SetIdentityTokenLifetime(server.IdentityTokenLifetime)
+                  .SetRefreshTokenLifetime(server.RefreshTokenLifetime);
+
+           options.AddSigningKey(keys.SigningKey)
+                  .AddEncryptionKey(keys.EncryptionKey);
+
+           // OpenIddict 默认把访问令牌也加密,那样只有它自己读得懂。市场 API 是独立的资源服务器,
+           // 要靠 JWKS 验签自行解析令牌,所以这里必须关掉加密 —— 授权码与刷新令牌照旧加密。
+           options.DisableAccessTokenEncryption();
+
+           options.UseAspNetCore()
+                  .EnableAuthorizationEndpointPassthrough()
+                  .EnableTokenEndpointPassthrough()
+                  .EnableUserInfoEndpointPassthrough()
+                  .EnableEndSessionEndpointPassthrough()
+                  .EnableStatusCodePagesIntegration();
+
+           if (!server.RequireHttps)
+           {
+               // 只为本机 http://localhost:7020 开路。生产环境放开它等于允许令牌在明文里裸奔。
+               options.UseAspNetCore().DisableTransportSecurityRequirement();
+           }
+       });
+
+builder.Services.AddHostedService<OpenIddictSeeder>();
+builder.Services.AddHostedService<TokenPruningWorker>();
+
+// ---- CORS ---------------------------------------------------------------
+// 授权端点是整页跳转,不需要 CORS;但 discovery、JWKS 与令牌端点都是前端用 fetch 调的,
+// 少了这一段,登录能跳过去、跳回来,却在换令牌那一步静静地失败在浏览器里。
+//
+// 允许的来源直接从客户端的回跳白名单推导:能发起登录的来源,恰好就是会来换令牌的来源。
+// 这样只有一处需要维护,不会出现"加了客户端却忘了加 CORS"。
+string[] browserOrigins = [.. server.Clients
+                              .SelectMany(client => client.RedirectUris.Concat(client.PostLogoutRedirectUris))
+                              .Select(static uri => Uri.TryCreate(uri, UriKind.Absolute, out Uri? parsed)
+                                                        ? parsed.GetLeftPart(UriPartial.Authority)
+                                                        : null)
+                              .OfType<string>()
+                              .Distinct(StringComparer.OrdinalIgnoreCase)];
+builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
+    policy.WithOrigins(browserOrigins).AllowAnyHeader().AllowAnyMethod()));
+
+builder.Services.AddRazorPages();
+builder.Services.AddProblemDetails();
+// 默认的 HTML 编码器会把所有非 ASCII 字符转成 &#x...; 实体。页面照样能看,但源码里全是转义,
+// 查问题时基本没法读。放开全部 Unicode 区段,让中文就是中文。
+builder.Services.Configure<WebEncoderOptions>(options =>
+    options.TextEncoderSettings = new TextEncoderSettings(UnicodeRanges.All));
+
+WebApplication app = builder.Build();
+
+app.UseSerilogRequestLogging();
+// 协议层的失败(比如 redirect_uri 不在白名单)由 OpenIddict 归到状态码上,
+// 再由这里重放到 /error 渲染成一句人话,而不是一个空白的 400。
+app.UseStatusCodePagesWithReExecute("/error", "?code={0}");
+app.UseStaticFiles();
+app.UseRouting();
+app.UseCors();
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapRazorPages();
+app.MapConnectEndpoints();
+app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
+
+await app.RunAsync();

@@ -1,0 +1,31 @@
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+
+    # 运行时注入 OIDC 配置:在 </head> 前插入一段 <script>,把
+    # window.__MARKET_AUTHORITY__ / __MARKET_CLIENT_ID__ 设好。
+    # ${...} 这两处由 nginx 镜像的 envsubst 在启动时替换(见 build/web.Dockerfile 的 ENV 默认值),
+    # 这样同一份构建产物可以对接不同环境的认证服务,不需要重新打包。
+    # 注意下面的 $uri / $host 等是 nginx 自己的变量,不带花括号,envsubst 不会碰它们。
+    sub_filter '</head>' '<script>window.__MARKET_AUTHORITY__="${MARKET_AUTHORITY}";window.__MARKET_CLIENT_ID__="${MARKET_CLIENT_ID}";</script></head>';
+    sub_filter_once on;
+    sub_filter_types text/html;
+
+    # SPA 路由:任何未命中的路径都回 index.html,交给前端路由。
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # API 反代。前端因此永远同源调用 /api,不需要处理跨域,也不必把后端地址编译进产物。
+    location /api/ {
+        proxy_pass http://api:8080/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # 插件包最大 512MB,反代这一层也得放开,否则大包在 nginx 就被 413 掉了。
+        client_max_body_size 512m;
+        proxy_request_buffering off;
+    }
+}

@@ -21,30 +21,34 @@ builder.Services.Configure<ClamAvOptions>(builder.Configuration.GetSection(ClamA
 builder.Services.Configure<MarketAuthOptions>(builder.Configuration.GetSection(MarketAuthOptions.SectionName));
 
 // ---- 身份认证:资源服务器姿态 ------------------------------------------------
-// 市场自己不发令牌,只验 EasilyNET.IdentityServer 签发的 JWT(经 Authority 拉 discovery 与 JWKS)。
-// 这样这边不需要知道对方任何内部实现,对方换存储/换部署形态也影响不到我们。
-//
-// ⚠️ Docker 网络特殊性:
-//   - IdentityServer 的 issuer 是浏览器可访问的 http://localhost:7020
-//   - 但 API 跑在容器内,localhost 指向自身,必须通过服务名 http://identity:8080 访问 IdentityServer
-//   - discovery 文档的 jwks_uri 基于 issuer 生成(http://localhost:7020/.well-known/jwks),
-//     容器内不可达。InternalAuthorityConfigurationManager 在拿到 discovery 后把 jwks_uri
-//     替换为 http://identity:8080/.well-known/jwks,使签名验证能拿到公钥。
+// 市场自己不发令牌,只验统一认证服务(src/VelaShell.Market.Identity)签发的 JWT:
+// 经 discovery 拿到 JWKS,再逐条校验签名、issuer、audience 与有效期。
 MarketAuthOptions auth = builder.Configuration.GetSection(MarketAuthOptions.SectionName).Get<MarketAuthOptions>() ?? new();
+// 浏览器看到的地址(issuer)与 API 能访问到的地址不一定是同一个:compose 里前者是
+// http://localhost:7020,后者是容器网络里的 http://identity:8080。两者不同时才需要改写文档地址。
+string internalAuthority = string.IsNullOrWhiteSpace(auth.Authority) ? auth.Issuer : auth.Authority;
+bool authorityDiffersFromIssuer = !string.Equals(internalAuthority.TrimEnd('/'), auth.Issuer.TrimEnd('/'), StringComparison.OrdinalIgnoreCase);
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
        .AddJwtBearer(options =>
        {
-           options.Authority = auth.Authority;
+           options.Authority = auth.Issuer;
            options.Audience = auth.Audience;
-           // 开发环境里 IdentityServer 常跑在自签证书上,允许显式放开;生产必须为 false。
+           // 关掉它等于允许中间人替换 discovery 与 JWKS。生产必须为 true。
            options.RequireHttpsMetadata = auth.RequireHttpsMetadata;
-           // 用自定义 ConfigurationManager 替换默认行为:从内部地址拉 discovery,再把
-           // jwks_uri 等 URL 从 localhost 替换为内部服务名,使容器内能完成签名验证。
-           options.ConfigurationManager = new VelaShell.Market.Api.InternalAuthorityConfigurationManager(auth.Authority);
+           if (authorityDiffersFromIssuer)
+           {
+               // discovery 文档里的 jwks_uri 是按 issuer 生成的,容器内不可达;
+               // 这个 ConfigurationManager 负责把它改写到内部地址上,详见该类的注释。
+               options.ConfigurationManager = new VelaShell.Market.Api.InternalAuthorityConfigurationManager(
+                   auth.Issuer, internalAuthority, auth.RequireHttpsMetadata);
+           }
            options.TokenValidationParameters = new TokenValidationParameters
            {
                ValidateIssuer = true,
-               ValidIssuer = "http://localhost:7020",
+               // 带不带结尾的斜杠都认。OpenIddict 用 Uri 表示 issuer,于是令牌里的 iss 一定带斜杠,
+               // 而人写配置时几乎不会带 —— 只认一种写法的话,这个差别会表现成"登录成功但一律 401"。
+               ValidIssuers = [auth.Issuer.TrimEnd('/'), $"{auth.Issuer.TrimEnd('/')}/"],
                ValidateAudience = !string.IsNullOrEmpty(auth.Audience),
                ValidAudience = auth.Audience,
                ValidateLifetime = true,
@@ -54,7 +58,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
            };
        });
 builder.Services.AddAuthorization(options =>
-    // 审核台:只有配置里列出的主体能进。刻意不依赖对方 IdentityServer 里的角色声明 ——
+    // 审核台:只有配置里列出的主体能进。刻意不依赖认证服务里的角色声明 ——
     // 市场的管理员是市场自己的概念,不该要求对方为我们维护一套角色。
     options.AddPolicy(MarketPolicies.Moderator, policy =>
         policy.RequireAssertion(context =>

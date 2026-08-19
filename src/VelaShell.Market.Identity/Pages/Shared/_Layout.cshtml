@@ -1,0 +1,27 @@
+@{
+    string title = ViewData["Title"] as string ?? "统一认证";
+}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>@title · VelaShell</title>
+    <link rel="stylesheet" href="~/site.css" asp-append-version="true" />
+</head>
+<body>
+    <main class="shell">
+        <header class="brand">
+            <a href="/" class="brand-mark">VelaShell</a>
+            <p class="brand-sub">统一认证</p>
+        </header>
+        <section class="card">
+            @RenderBody()
+        </section>
+        <footer class="foot">
+            登录状态只保存在本站的会话 cookie 里;插件市场拿到的是一枚有期限的访问令牌。
+        </footer>
+    </main>
+</body>
+</html>

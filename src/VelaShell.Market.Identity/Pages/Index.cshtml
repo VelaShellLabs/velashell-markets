@@ -1,0 +1,56 @@
+@page "/"
+@model IndexModel
+@{
+    ViewData["Title"] = "统一认证";
+}
+
+@if (Model.Account is null)
+{
+    <h1>VelaShell 统一认证</h1>
+    <p class="lede">插件市场的上传、评价与审核都用这里的账号。浏览和搜索不需要登录。</p>
+    <p><a asp-page="/Account/Login">登录</a>@if (Model.AllowRegistration) { <text> · <a asp-page="/Account/Register">注册</a></text> }</p>
+}
+else
+{
+    <h1>@(Model.Account.DisplayName ?? Model.Account.UserName)</h1>
+    <p class="lede">已登录。回到插件市场即可继续操作。</p>
+
+    <ul class="kv">
+        <li><span class="k">用户名</span><span class="v">@Model.Account.UserName</span></li>
+        @if (!string.IsNullOrEmpty(Model.Account.Email))
+        {
+            <li><span class="k">邮箱</span><span class="v">@Model.Account.Email</span></li>
+        }
+        <li>
+            <span class="k">身份标识(sub)</span>
+            <span class="v"><code>@Model.Account.Id</code></span>
+        </li>
+    </ul>
+    <p class="lede">
+        把上面这串 <code>sub</code> 填进市场 API 的 <code>Auth__ModeratorSubjects__0</code>,
+        这个账号就能进审核台 —— 审核员是市场自己的概念,不由认证服务决定。
+    </p>
+
+    @if (!string.IsNullOrEmpty(Model.Error))
+    {
+        <p class="notice error">@Model.Error</p>
+    }
+    @if (Model.PasswordChanged)
+    {
+        <p class="notice ok">口令已更新。其它设备上的登录会在下次续期时失效。</p>
+    }
+
+    <form method="post">
+        <label>
+            <span>当前口令</span>
+            <input asp-for="CurrentPassword" type="password" autocomplete="current-password" required />
+        </label>
+        <label>
+            <span>新口令</span>
+            <input asp-for="NewPassword" type="password" autocomplete="new-password" required />
+        </label>
+        <button type="submit">修改口令</button>
+    </form>
+
+    <p class="alt"><a href="/connect/endsession">退出登录</a></p>
+}
