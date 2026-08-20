@@ -1,12 +1,13 @@
+import { App, Button, Card, Descriptions, Empty, Skeleton, Space, Tag, Typography } from 'antd';
 import { Findings, SignatureTag } from '@/components';
 import { approveVersion, getQueue, rejectVersion } from '@/services/moderation';
 import { formatDateTime, formatSize } from '@/utils/format';
+
 import { ReloadOutlined } from '@ant-design/icons';
+import { askReason } from './askReason';
 import { keepResult } from '@/utils/request';
 import { useRequest } from '@umijs/max';
-import { App, Button, Card, Descriptions, Empty, Skeleton, Space, Tag, Typography } from 'antd';
 import { useState } from 'react';
-import { askReason } from './askReason';
 
 /**
  * 隔离队列。这里处理的是**检测判为"需人工复核"的包** —— 它们既没被拒,也绝不可下载,
@@ -66,7 +67,7 @@ export default function QueuePanel() {
           <Empty description="队列是空的" style={{ padding: '32px 0' }} />
         </Card>
       ) : (
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           {items.map((item) => (
             <Card
               key={item.id}

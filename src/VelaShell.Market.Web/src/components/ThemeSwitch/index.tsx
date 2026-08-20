@@ -1,6 +1,6 @@
 import { useThemeMode, type ThemeMode } from '@/utils/theme';
 import { DesktopOutlined, MoonOutlined, SunOutlined } from '@ant-design/icons';
-import { Button, Dropdown, Tooltip } from 'antd';
+import { Button, Dropdown } from 'antd';
 import type { ReactNode } from 'react';
 
 /** 与参考项目(以及 VelaShell 宿主端)一致的三档:明亮 / 暗黑 / 跟随系统。 */
@@ -19,7 +19,6 @@ const OPTIONS: { key: ThemeMode; label: string; icon: ReactNode }[] = [
  */
 export default function ThemeSwitch() {
   const { mode, dark, setMode } = useThemeMode();
-  const current = OPTIONS.find((option) => option.key === mode);
 
   return (
     <Dropdown
@@ -30,9 +29,7 @@ export default function ThemeSwitch() {
         onClick: ({ key }) => setMode(key as ThemeMode),
       }}
     >
-      <Tooltip title={`外观:${current?.label ?? '跟随系统'}`} placement="bottom">
-        <Button type="text" icon={dark ? <MoonOutlined /> : <SunOutlined />} aria-label="切换外观" />
-      </Tooltip>
+      <Button type="text" icon={dark ? <MoonOutlined /> : <SunOutlined />} aria-label="切换外观" />
     </Dropdown>
   );
 }

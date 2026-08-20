@@ -1,4 +1,5 @@
 import { Space, Typography } from 'antd';
+
 import type { ReactNode } from 'react';
 
 /**
@@ -12,7 +13,7 @@ export default function PageShell({ title, description, extra, children }: { tit
     <div className="market-page">
       {title || extra ? (
         <div className="market-page-head">
-          <Space direction="vertical" size={2}>
+          <Space orientation="vertical" size={2}>
             {title ? (
               <Typography.Title level={3} style={{ margin: 0 }}>
                 {title}

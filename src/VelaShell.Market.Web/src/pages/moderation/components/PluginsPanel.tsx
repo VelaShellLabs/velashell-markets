@@ -53,7 +53,7 @@ export default function PluginsPanel() {
           api.modal.error({
             title: '部分对象未能删除',
             content: (
-              <Space direction="vertical" size={8}>
+              <Space orientation="vertical" size={8}>
                 <Typography.Text>已删除 {result.deletedVersions} 个版本,以下对象删除失败,需要到对象存储里手工清理:</Typography.Text>
                 <Typography.Text code copyable>
                   {result.failedKeys.join('\n')}
@@ -102,7 +102,7 @@ export default function PluginsPanel() {
       title: '插件',
       dataIndex: 'id',
       render: (_, row) => (
-        <Space direction="vertical" size={2}>
+        <Space orientation="vertical" size={2}>
           <Space size={8} wrap>
             <Typography.Text strong>{row.displayName}</Typography.Text>
             {row.isUnlisted ? (
@@ -131,7 +131,7 @@ export default function PluginsPanel() {
       dataIndex: 'ownerSubject',
       width: 200,
       render: (_, row) => (
-        <Space direction="vertical" size={2}>
+        <Space orientation="vertical" size={2}>
           <Typography.Text>{row.ownerName ?? '—'}</Typography.Text>
           <Typography.Text type="secondary" copyable style={{ fontSize: 11 }}>
             {row.ownerSubject}
@@ -201,7 +201,7 @@ export default function PluginsPanel() {
         // 描述是最常见的违规载体,直接展开看原文,不用点进插件页再回来。
         expandable={{
           expandedRowRender: (row) => (
-            <Space direction="vertical" size={8} style={{ width: '100%' }}>
+            <Space orientation="vertical" size={8} style={{ width: '100%' }}>
               {row.descriptionRemovedReason ? (
                 <Typography.Text type="warning">
                   描述已于 {formatDateTime(row.descriptionRemovedAt)} 被移除:{row.descriptionRemovedReason}

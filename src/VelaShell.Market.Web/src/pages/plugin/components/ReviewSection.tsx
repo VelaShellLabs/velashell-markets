@@ -1,11 +1,12 @@
-import { REVIEW_PAGE_SIZE } from '@/configs';
-import { deleteReview, getMyReview, listReviews, upsertReview } from '@/services/reviews';
-import { login } from '@/utils/auth';
-import { formatDateTime } from '@/utils/format';
-import { EditOutlined, UserOutlined } from '@ant-design/icons';
-import { keepResult } from '@/utils/request';
-import { useModel, useRequest } from '@umijs/max';
 import { App, Avatar, Button, Card, Divider, Empty, Form, Input, List, Pagination, Popconfirm, Rate, Space, Tag, Typography, theme } from 'antd';
+import { EditOutlined, UserOutlined } from '@ant-design/icons';
+import { deleteReview, getMyReview, listReviews, upsertReview } from '@/services/reviews';
+import { useModel, useRequest } from '@umijs/max';
+
+import { REVIEW_PAGE_SIZE } from '@/configs';
+import { formatDateTime } from '@/utils/format';
+import { keepResult } from '@/utils/request';
+import { login } from '@/utils/auth';
 import { useState } from 'react';
 
 /** 应用商店式评分汇总:左边大均分与总数,右边 5→1 星分布条。 */
@@ -107,7 +108,7 @@ export default function ReviewSection({ pluginId, isOwner }: { pluginId: string;
   const showForm = signedIn && !isOwner && (!mine || editing);
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+    <Space orientation="vertical" size={16} style={{ width: '100%' }}>
       {total > 0 ? (
         <Card size="small">
           <RatingSummary distribution={reviews?.distribution ?? {}} />
@@ -145,7 +146,7 @@ export default function ReviewSection({ pluginId, isOwner }: { pluginId: string;
             </Space>
           }
         >
-          <Space direction="vertical" size={2} style={{ width: '100%' }}>
+          <Space orientation="vertical" size={2} style={{ width: '100%' }}>
             <Space>
               <Rate disabled value={mine.rating} style={{ fontSize: 14 }} />
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>

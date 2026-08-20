@@ -1,4 +1,5 @@
 import { Alert, App, Input, Space, Typography } from 'antd';
+
 import type { ReactNode } from 'react';
 
 type AppApi = ReturnType<typeof App.useApp>;
@@ -30,7 +31,7 @@ export function askReason(api: Pick<AppApi, 'modal' | 'message'>, options: Reaso
     icon: null,
     content: (
       <Space direction="vertical" size={12} style={{ width: '100%', marginTop: 8 }}>
-        {options.danger ? <Alert type="error" showIcon message={options.danger} /> : null}
+        {options.danger ? <Alert type="error" showIcon title={options.danger} /> : null}
         {options.description ? <Typography.Text type="secondary">{options.description}</Typography.Text> : null}
         <Input.TextArea rows={3} placeholder={options.placeholder} maxLength={500} showCount onChange={(e) => (reason = e.target.value)} />
       </Space>

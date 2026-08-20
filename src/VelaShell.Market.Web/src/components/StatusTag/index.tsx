@@ -1,5 +1,6 @@
-import type { TagPreset } from '@/configs';
 import { Tag, Tooltip } from 'antd';
+
+import type { TagPreset } from '@/configs';
 
 /**
  * 把后端返回的状态字符串按预设表渲染成标签。
@@ -11,7 +12,7 @@ export default function StatusTag({ value, presets, fallback = '—' }: { value?
   if (!value) return <>{fallback}</>;
   const preset = presets[value] ?? { text: value };
   const tag = (
-    <Tag color={preset.color} bordered={false}>
+    <Tag color={preset.color} variant="filled">
       {preset.text}
     </Tag>
   );

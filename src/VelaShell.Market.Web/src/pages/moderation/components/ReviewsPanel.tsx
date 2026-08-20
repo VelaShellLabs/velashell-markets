@@ -87,7 +87,7 @@ export default function ReviewsPanel() {
       title: '评价者',
       width: 180,
       render: (_, row) => (
-        <Space direction="vertical" size={2}>
+        <Space orientation="vertical" size={2}>
           <Typography.Text>{row.displayName ?? '匿名用户'}</Typography.Text>
           <Typography.Text type="secondary" copyable style={{ fontSize: 11 }}>
             {row.subject}
@@ -100,17 +100,17 @@ export default function ReviewsPanel() {
       title: '正文',
       dataIndex: 'body',
       render: (_, row) => (
-        <Space direction="vertical" size={4} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={4} style={{ width: '100%' }}>
           <Space size={8} wrap>
             {row.isHidden ? (
               <Tooltip title={`${row.hiddenReason ?? ''}(${row.hiddenBySubject ?? '未知审核员'})`}>
-                <Tag color="red" bordered={false}>
+                <Tag color="red" variant="filled">
                   已隐藏
                 </Tag>
               </Tooltip>
             ) : null}
             {row.pluginVersion ? (
-              <Tag bordered={false} style={{ fontSize: 11 }}>
+              <Tag variant="filled" style={{ fontSize: 11 }}>
                 v{row.pluginVersion}
               </Tag>
             ) : null}

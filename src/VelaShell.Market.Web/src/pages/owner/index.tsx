@@ -1,10 +1,11 @@
-import { PageShell } from '@/components';
-import { getMyPlugins, updatePlugin } from '@/services/me';
-import { formatDateTime } from '@/utils/format';
-import { EditOutlined, ReloadOutlined } from '@ant-design/icons';
-import { keepResult } from '@/utils/request';
-import { history, useRequest } from '@umijs/max';
 import { App, Button, Card, Drawer, Empty, Form, Input, Skeleton, Space, Table, Tag, Tooltip, Typography } from 'antd';
+import { EditOutlined, ReloadOutlined } from '@ant-design/icons';
+import { getMyPlugins, updatePlugin } from '@/services/me';
+import { history, useRequest } from '@umijs/max';
+
+import { PageShell } from '@/components';
+import { formatDateTime } from '@/utils/format';
+import { keepResult } from '@/utils/request';
 import { useState } from 'react';
 
 /**
@@ -75,7 +76,7 @@ export default function OwnerPage() {
               {
                 title: '插件',
                 render: (_, row) => (
-                  <Space direction="vertical" size={0}>
+                  <Space orientation="vertical" size={0}>
                     <a onClick={() => history.push(`/plugins/${row.id}`)}>{row.displayName}</a>
                     <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                       {row.id}
@@ -83,7 +84,7 @@ export default function OwnerPage() {
                   </Space>
                 ),
               },
-              { title: '最新版本', dataIndex: 'latestVersion', width: 110, render: (value) => (value ? <Tag bordered={false}>v{value}</Tag> : <Tag bordered={false}>未发布</Tag>) },
+              { title: '最新版本', dataIndex: 'latestVersion', width: 110, render: (value) => (value ? <Tag variant="filled">v{value}</Tag> : <Tag variant="filled">未发布</Tag>) },
               { title: '下载', dataIndex: 'downloads', width: 90 },
               { title: '评分', width: 120, render: (_, row) => (row.ratingCount > 0 ? `${row.ratingAverage.toFixed(1)} (${row.ratingCount})` : '—') },
               {
@@ -93,12 +94,12 @@ export default function OwnerPage() {
                 render: (_, row) =>
                   row.isUnlisted ? (
                     <Tooltip title={row.unlistedReason}>
-                      <Tag color="error" bordered={false}>
+                      <Tag color="error" variant="filled">
                         已下架
                       </Tag>
                     </Tooltip>
                   ) : (
-                    <Tag color="success" bordered={false}>
+                    <Tag color="success" variant="filled">
                       正常
                     </Tag>
                   ),

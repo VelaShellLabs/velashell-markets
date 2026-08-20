@@ -1,12 +1,13 @@
-import { PluginIcon, SignatureTag } from '@/components';
-import { getMyPlugins } from '@/services/me';
-import { getDownloadUrl, getPlugin } from '@/services/market';
-import { formatDate, formatRating, formatSize } from '@/utils/format';
-import { CloudDownloadOutlined } from '@ant-design/icons';
-import { keepResult } from '@/utils/request';
-import { useModel, useParams, useRequest } from '@umijs/max';
 import { Alert, App, Button, Card, Col, Descriptions, Result, Row, Skeleton, Space, Table, Tabs, Tag, Typography } from 'antd';
+import { PluginIcon, SignatureTag } from '@/components';
+import { formatDate, formatRating, formatSize } from '@/utils/format';
+import { getDownloadUrl, getPlugin } from '@/services/market';
+import { useModel, useParams, useRequest } from '@umijs/max';
+
+import { CloudDownloadOutlined } from '@ant-design/icons';
 import ReviewSection from './components/ReviewSection';
+import { getMyPlugins } from '@/services/me';
+import { keepResult } from '@/utils/request';
 
 /** 插件详情页:左侧内容(说明/版本/评价),右侧元信息与下载。 */
 export default function PluginDetailPage() {
@@ -55,7 +56,7 @@ export default function PluginDetailPage() {
         <Col xs={24} lg={17}>
           <Space align="start" size={16} style={{ marginBottom: 20 }}>
             <PluginIcon id={data.id} name={data.displayName} size={64} />
-            <Space direction="vertical" size={4}>
+            <Space orientation="vertical" size={4}>
               <Space align="center" wrap>
                 <Typography.Title level={3} style={{ margin: 0 }}>
                   {data.displayName}
@@ -141,7 +142,7 @@ export default function PluginDetailPage() {
 
         <Col xs={24} lg={7}>
           <Card size="small" style={{ marginBottom: 16 }}>
-            <Space direction="vertical" size={12} style={{ width: '100%' }}>
+            <Space orientation="vertical" size={12} style={{ width: '100%' }}>
               <Button type="primary" size="large" block icon={<CloudDownloadOutlined />} disabled={!latest} onClick={() => latest && download(latest.version)}>
                 下载 .vpx
               </Button>
@@ -177,11 +178,11 @@ export default function PluginDetailPage() {
 
           {latest ? (
             <Card size="small" title="完整性校验">
-              <Space direction="vertical" size={8} style={{ width: '100%' }}>
+              <Space orientation="vertical" size={8} style={{ width: '100%' }}>
                 <Alert
                   type="info"
                   showIcon
-                  message="下载后可核对校验和"
+                  title="下载后可核对校验和"
                   description={
                     <span>
                       用 <code>vela-plugin verify</code> 可以一并校验容器完整性与签名。

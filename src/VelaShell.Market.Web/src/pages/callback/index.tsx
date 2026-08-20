@@ -1,7 +1,8 @@
-import { completeLogin } from '@/utils/auth';
-import { history, useModel } from '@umijs/max';
 import { Button, Result, Spin, Typography } from 'antd';
+import { history, useModel } from '@umijs/max';
 import { useEffect, useState } from 'react';
+
+import { completeLogin } from '@/utils/auth';
 
 /**
  * OIDC 登录回调:用授权码换取令牌、刷新全局用户状态后回首页。
@@ -48,7 +49,7 @@ export default function CallbackPage() {
 
   return (
     <div className="market-center-stage">
-      <Spin size="large" tip="登录中…">
+      <Spin size="large" description="登录中…">
         <div style={{ height: 40 }} />
       </Spin>
     </div>
