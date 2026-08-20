@@ -3,8 +3,8 @@
    在这里覆盖组件样式会让主题切换失效。 */
 
 :root {
-  /* 顶栏与页面内容共用一个宽度上限,两者才对得齐。 */
-  --market-page-max: 1440px;
+  /* 顶栏与页面内容共用同一个左右内边距,两者的左右边缘才对得齐。 */
+  --market-page-pad: 32px;
 }
 
 body {
@@ -14,26 +14,27 @@ body {
 
 /* ---- 页面容器 ------------------------------------------------------------ */
 
-/* ProLayout 会把内容区收进一个定宽(1200px)容器里,于是宽屏上整页挤成中间一条,
-   .market-page 的 max-width 根本没机会生效。这里放开它,宽度改由页面自己控制。 */
-.ant-pro-layout .ant-pro-layout-content {
+/* 真正给内容设上限的是 GridContent 的 .ant-pro-grid-content.wide(定宽 1200px 居中),
+   不是 .ant-pro-layout-content —— 只覆盖后者不起作用,宽屏上整页仍然挤在中间一条。
+   这里把上限彻底拿掉:内容跟顶栏一样铺满窗口,插件多了一行才排得下更多张卡片。 */
+.ant-pro-layout .ant-pro-layout-content,
+.ant-pro-grid-content,
+.ant-pro-grid-content-children {
   max-width: none;
-  padding: 0;
+  width: 100%;
   margin: 0;
+  padding: 0;
 }
 
-/* 顶栏内容跟着页面走,否则导航贴在 1200px 的边上、内容却更宽,看起来是错位的。 */
+/* 顶栏内容与页面用同一个左右内边距 —— 品牌 logo 的左边缘和卡片的左边缘因此对齐。 */
 .ant-pro-top-nav-header-main {
-  max-width: var(--market-page-max);
+  max-width: none;
   width: 100%;
-  margin: 0 auto;
-  padding-inline: 24px;
+  padding-inline: var(--market-page-pad);
 }
 
 .market-page {
-  max-width: var(--market-page-max);
-  margin: 0 auto;
-  padding: 28px 24px 56px;
+  padding: 28px var(--market-page-pad) 56px;
 }
 
 .market-hero {

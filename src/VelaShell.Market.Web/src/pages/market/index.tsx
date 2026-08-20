@@ -4,7 +4,8 @@ import { Card, Col, Empty, Input, Pagination, Row, Segmented, Skeleton, Space, T
 import { useEffect, useState } from 'react';
 import PluginCard from './components/PluginCard';
 
-const SIZE = 12;
+// 一页 24 个:内容区铺满窗口后一行能排 4–6 张卡片,12 个只够两三行,翻页太频繁。
+const SIZE = 24;
 
 /** 浏览页:搜索 + 标签过滤 + 排序 + 分页。 */
 export default function MarketPage() {

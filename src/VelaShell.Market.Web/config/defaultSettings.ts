@@ -11,6 +11,8 @@ const Settings: ProLayoutProps & {
   navTheme: 'light',
   colorPrimary: '#4f46e5',
   layout: 'top',
+  // Fluid = 内容不被收进 1200px 的定宽容器。这一项单靠配置在 top 布局下不总是生效,
+  // global.less 里还对 .ant-pro-grid-content 做了兜底,两处要一起看。
   contentWidth: 'Fluid',
   fixedHeader: true,
   fixSiderbar: false,
