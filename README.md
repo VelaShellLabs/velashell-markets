@@ -42,7 +42,7 @@ docker compose up -d --build
 
 ```bash
 dotnet run --project src/VelaShell.Market.Api      # API
-cd src/VelaShell.Market.Web && npm install && npm run dev   # 前端(代理到 8080)
+cd src/VelaShell.Market.Web && bun install && bun run dev   # 前端(代理到 8080)
 ```
 
 同级目录下存在 `VelaShell` 仓库时,`.vpx` 解析会**直接引用宿主那份 SDK 工程**

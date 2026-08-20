@@ -6,7 +6,7 @@
     <ProjectGuid>81dded9d-158b-e303-5f62-77a2896d2a5a</ProjectGuid>
     <!-- 启动(F5/Ctrl+F5)先对整套 compose 做 docker compose build:
          web 服务带 build 节,所以前端每次都会按 Docker 层缓存增量重打进镜像 ——
-         源码没动秒过,动了自动重新 npm build。随后打开商店首页。 -->
+         源码没动秒过,动了自动重新跑 bun run build。随后打开商店首页。 -->
     <DockerLaunchBrowser>True</DockerLaunchBrowser>
     <DockerServiceName>web</DockerServiceName>
     <DockerServiceUrl>http://localhost:8000</DockerServiceUrl>

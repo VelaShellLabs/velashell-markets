@@ -1,14 +1,22 @@
 <Project Sdk="Microsoft.VisualStudio.JavaScript.Sdk/1.0.1184077">
   <PropertyGroup>
-    <!-- 本机调试直接跑 dev server(需要本机装了 bun;想用 npm 改成 npm run dev)。 -->
+    <!-- 本机调试直接跑 dev server(需要本机装了 bun)。 -->
     <StartupCommand>bun run dev</StartupCommand>
     <BuildOutputFolder>$(MSBuildProjectDirectory)\dist</BuildOutputFolder>
     <!--
-      真正的打包发生在容器里(build/web.Dockerfile 的 npm run build):
+      真正的打包发生在容器里(build/web.Dockerfile 的 bun run build):
       VS 构建这个项目时**不跑** package.json 的 build/install,免得解决方案构建
       依赖本机的 node 工具链。它在解决方案里只承担"资源管理 + 本机起 dev server"。
     -->
     <ShouldRunBuildScript>false</ShouldRunBuildScript>
     <ShouldRunNpmInstall>false</ShouldRunNpmInstall>
+    <!--
+      整个仓库统一用 bun,不留 package-lock.json,VS 这边也不该冒出 npm。
+      SDK 的 npm install(Sdk.targets 的 RunNpmInstall)已被上面的 ShouldRunNpmInstall 关掉;
+      BuildCommand 则必须显式写死 —— 它留空时 SDK 的 EvaluateNPMScripts 会照 package.json
+      的 build 脚本自动填成 `npm run build`,而 _RunNpmCommandForPublishAssets 执行它时
+      只判断非空、**不看** ShouldRunBuildScript,Publish/Deploy 一走到就会在本机拉起 npm。
+    -->
+    <BuildCommand>bun run build</BuildCommand>
   </PropertyGroup>
 </Project>

@@ -6,5 +6,3 @@ dist
 # 就让源码层缓存失效、白跑一遍前端打包。
 *.esproj
 *.esproj.user
-bun.lock
-bun.lockb
