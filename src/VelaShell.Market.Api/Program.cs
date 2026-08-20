@@ -49,6 +49,15 @@ if (auth.RequireHttpsMetadata && !auth.Issuer.StartsWith("https://", StringCompa
         "要求 HTTPS 元数据时 issuer 必须是 https —— 请把 IDENTITY_ISSUER 换成 https 地址," +
         "或在还没上 TLS 之前把 AUTH_REQUIRE_HTTPS 保持为 false。");
 }
+// 漏写协议的 "identity:8080" 是个合法的绝对 URI(scheme=identity),不会在解析这一步失败,
+// 只会让后面的地址改写拼出连不上的东西 —— 那时报出来的是一串 TLS/连接错误,离真因很远。
+if (!Uri.TryCreate(internalAuthority, UriKind.Absolute, out Uri? parsedAuthority)
+    || (parsedAuthority.Scheme != Uri.UriSchemeHttp && parsedAuthority.Scheme != Uri.UriSchemeHttps))
+{
+    throw new InvalidOperationException(
+        $"Auth:Authority 是 “{internalAuthority}”,不是一个 http/https 的绝对地址。" +
+        "它应该形如 http://identity:8080(API 在容器网络里访问认证服务的地址)。");
+}
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
        .AddJwtBearer(options =>

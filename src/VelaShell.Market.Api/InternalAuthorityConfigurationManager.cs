@@ -46,19 +46,17 @@ internal sealed class InternalAuthorityConfigurationManager : IConfigurationMana
 }
 
 /// <summary>
-/// 把文档地址里的对外 issuer 前缀换成内部可达地址, 再交给真正的检索器。
+/// 把文档地址一律拨回内部可达地址, 再交给真正的检索器。
 /// </summary>
 internal sealed class PatchingDocumentRetriever : IDocumentRetriever
 {
-    private readonly string _issuer;
     private readonly string _internalAuthority;
     private readonly HttpDocumentRetriever _inner;
 
-    /// <param name="issuer">对外 issuer, 令牌里 <c>iss</c> 的值。</param>
+    /// <param name="issuer">对外 issuer, 令牌里 <c>iss</c> 的值。只用来判断对外是不是 HTTPS。</param>
     /// <param name="internalAuthority">API 实际能访问到的认证服务地址。</param>
     public PatchingDocumentRetriever(string issuer, string internalAuthority)
     {
-        _issuer = issuer;
         _internalAuthority = internalAuthority.TrimEnd('/');
 
         HttpClient client = new();
@@ -87,5 +85,50 @@ internal sealed class PatchingDocumentRetriever : IDocumentRetriever
 
     /// <inheritdoc />
     public Task<string> GetDocumentAsync(string address, CancellationToken cancel) =>
-        _inner.GetDocumentAsync(address.Replace(_issuer, _internalAuthority, StringComparison.OrdinalIgnoreCase), cancel);
+        _inner.GetDocumentAsync(Rewrite(address), cancel);
+
+    private string Rewrite(string address) => AuthorityAddressRewriter.ToInternal(address, _internalAuthority);
+}
+
+/// <summary>
+/// 把认证服务文档的地址拨回内部可达地址。抽成公开的纯函数是为了能单测 ——
+/// 这段逻辑只在"对外 HTTPS + 内部明文"的完整部署下才会被真正走到,
+/// 靠手工验证的话每次都要把整套 frp + 证书跑起来才发现写错了。
+/// </summary>
+public static class AuthorityAddressRewriter
+{
+    /// <summary>
+    /// 换掉 scheme + 主机 + 端口, 路径与查询串原样保留。地址不是绝对 URI 时原样返回。
+    ///
+    /// 为什么**不能用字符串替换 issuer 前缀**:OpenIddict 生成 discovery 里的端点 URL 时,
+    /// 用的是**当前请求的 scheme 与 Host**, 而不是配置的 issuer。API 从容器网络直连
+    /// <c>http://identity:8080</c>, 请求又带着我们补的 <c>X-Forwarded-Proto: https</c>,
+    /// 于是文档里的 <c>jwks_uri</c> 会长成 <c>https://identity:8080/.well-known/jwks</c>
+    /// —— 里面压根没有 issuer 那个域名, 前缀替换落空, 结果是拿着 https 去连一个只讲明文的端口,
+    /// 报 "Cannot determine the frame size or a corrupted frame was received"。
+    ///
+    /// 按 URI 结构重写就与文档里 advertise 了什么无关:对外域名也好、容器主机名也好,
+    /// 一律拨回内部地址。调用方只服务于单一认证服务, 所以无条件重写是安全的。
+    /// </summary>
+    /// <param name="address">discovery 或 JWKS 的地址。</param>
+    /// <param name="internalAuthority">API 实际能访问到的认证服务地址(如 <c>http://identity:8080</c>)。</param>
+    public static string ToInternal(string address, string internalAuthority)
+    {
+        // 必须显式校验 scheme:漏写协议的 "identity:8080" 会被 Uri.TryCreate 当成**合法的绝对 URI**
+        // (scheme=identity、path=8080),照着它重写会拼出 "identity:/.well-known/jwks" 这种
+        // 谁也连不上的地址。宁可原样返回,把问题留给启动校验去大声报出来。
+        if (!Uri.TryCreate(address, UriKind.Absolute, out Uri? target)
+            || !Uri.TryCreate(internalAuthority, UriKind.Absolute, out Uri? authority)
+            || (authority.Scheme != Uri.UriSchemeHttp && authority.Scheme != Uri.UriSchemeHttps))
+        {
+            return address;
+        }
+        return new UriBuilder(target)
+        {
+            Scheme = authority.Scheme,
+            Host = authority.Host,
+            // -1 表示"用该 scheme 的默认端口"。内部地址显式写了端口时照搬。
+            Port = authority.IsDefaultPort ? -1 : authority.Port
+        }.Uri.ToString();
+    }
 }
