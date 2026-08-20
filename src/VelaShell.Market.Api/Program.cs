@@ -1,6 +1,5 @@
 using Amazon.Runtime;
 using Amazon.S3;
-using EasilyNET.Mongo.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
@@ -57,10 +56,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                RoleClaimType = "role"
            };
        });
-builder.Services.AddAuthorization(options =>
-    // 审核台:只有配置里列出的主体能进。刻意不依赖认证服务里的角色声明 ——
-    // 市场的管理员是市场自己的概念,不该要求对方为我们维护一套角色。
-    options.AddPolicy(MarketPolicies.Moderator, policy =>
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy(MarketPolicies.Moderator, policy =>
         policy.RequireAssertion(context =>
             // 主体的取法必须与 PrincipalExtensions.Subject() 完全一致:两处分叉的话,
             // 换一次声明映射就会出现"归属判断认得出你、审核策略认不出你"。
@@ -68,11 +65,10 @@ builder.Services.AddAuthorization(options =>
             && auth.ModeratorSubjects.Contains(
                 context.User.FindFirst("sub")?.Value
                 ?? context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                ?? ""))));
+                ?? "")));
 
 // ---- 数据与存储 --------------------------------------------------------------
-builder.Services.AddMongoContext<MarketDbContext>(builder.Configuration.GetConnectionString("Mongo")
-                                                  ?? "mongodb://localhost:27017/velashell-market");
+builder.Services.AddMongoContext<MarketDbContext>(builder.Configuration.GetConnectionString("Mongo") ?? "mongodb://localhost:27017/velashell-market");
 builder.Services.AddSingleton<IAmazonS3>(provider =>
 {
     ObjectStorageOptions storage = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<ObjectStorageOptions>>().Value;
@@ -129,6 +125,3 @@ app.MapReviewEndpoints();
 app.MapModerationEndpoints();
 
 await app.RunAsync();
-
-/// <summary>供集成测试引用的入口标记。</summary>
-public partial class Program;
