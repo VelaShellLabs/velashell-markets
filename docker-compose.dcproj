@@ -5,8 +5,9 @@
     <DockerTargetOS>Linux</DockerTargetOS>
     <ProjectGuid>81dded9d-158b-e303-5f62-77a2896d2a5a</ProjectGuid>
     <!-- 启动(F5/Ctrl+F5)先对整套 compose 做 docker compose build:
-         web 服务带 build 节,所以前端每次都会按 Docker 层缓存增量重打进镜像 ——
-         源码没动秒过,动了自动重新跑 bun run build。随后打开商店首页。 -->
+         web 服务带 build 节。前端不在容器里打包:dist/ 由 Web 项目在本机
+         (bun run build)产出,slnx 里那条 BuildDependency 保证它先于 compose 跑,
+         镜像只是把 dist/ 装进 nginx。随后打开商店首页。 -->
     <DockerLaunchBrowser>True</DockerLaunchBrowser>
     <DockerServiceName>web</DockerServiceName>
     <DockerServiceUrl>http://localhost:8000</DockerServiceUrl>

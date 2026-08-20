@@ -49,6 +49,11 @@ cd src/VelaShell.Market.Web && bun install && bun run dev   # 前端(代理到 8
 (见根 `Directory.Build.props` 的 `UseLocalVelaShellSdk`),改一处两边同步;
 容器构建看不到同级仓库,自动回退到 NuGet 包。
 
+前端用 bun,仓库里只有 `bun.lock`,没有 package-lock.json。**前端不在容器里打包**:
+`build/web.Dockerfile` 只把 `dist/` 装进 nginx 镜像,所以在没跑过打包的机器上
+构建 web 镜像之前,要先 `cd src/VelaShell.Market.Web && bun install && bun run build`。
+VS 里不用管 —— Web 项目参与解决方案构建时会自己跑 `bun install` 与 `bun run build`。
+
 ## 结构
 
 ```

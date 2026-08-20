@@ -1,22 +1,34 @@
 <Project Sdk="Microsoft.VisualStudio.JavaScript.Sdk/1.0.1184077">
   <PropertyGroup>
-    <!-- 本机调试直接跑 dev server(需要本机装了 bun)。 -->
+    <!-- 本机调试直接跑 dev server。 -->
     <StartupCommand>bun run dev</StartupCommand>
     <BuildOutputFolder>$(MSBuildProjectDirectory)\dist</BuildOutputFolder>
     <!--
-      真正的打包发生在容器里(build/web.Dockerfile 的 bun run build):
-      VS 构建这个项目时**不跑** package.json 的 build/install,免得解决方案构建
-      依赖本机的 node 工具链。它在解决方案里只承担"资源管理 + 本机起 dev server"。
+      前端在本机打包,产物 dist/ 由 build/web.Dockerfile 直接装进 nginx 镜像,
+      所以解决方案构建**必须**真的跑一遍打包 —— 不再像以前那样把它甩给容器。
+      slnx 里 docker-compose.dcproj 声明了对本项目的 BuildDependency,
+      保证 compose 打镜像时 dist/ 已经是新的。
     -->
-    <ShouldRunBuildScript>false</ShouldRunBuildScript>
-    <ShouldRunNpmInstall>false</ShouldRunNpmInstall>
-    <!--
-      整个仓库统一用 bun,不留 package-lock.json,VS 这边也不该冒出 npm。
-      SDK 的 npm install(Sdk.targets 的 RunNpmInstall)已被上面的 ShouldRunNpmInstall 关掉;
-      BuildCommand 则必须显式写死 —— 它留空时 SDK 的 EvaluateNPMScripts 会照 package.json
-      的 build 脚本自动填成 `npm run build`,而 _RunNpmCommandForPublishAssets 执行它时
-      只判断非空、**不看** ShouldRunBuildScript,Publish/Deploy 一走到就会在本机拉起 npm。
-    -->
+    <ShouldRunBuildScript>true</ShouldRunBuildScript>
     <BuildCommand>bun run build</BuildCommand>
+    <!--
+      SDK 自带的依赖还原写死了 `npm install`(Sdk.targets 的 RunNpmInstall),
+      整个仓库统一用 bun,所以关掉它,改用下面的 BunInstall。
+      BuildCommand 也必须显式写:留空时 SDK 的 EvaluateNPMScripts 会照 package.json
+      的 build 脚本自动填成 `npm run build`。
+    -->
+    <ShouldRunNpmInstall>false</ShouldRunNpmInstall>
   </PropertyGroup>
+
+  <!--
+    依赖还原。只有 bun.lock 比上次安装的时间戳新(或 node_modules 压根不在)时才跑,
+    所以平时构建是零开销。frozen-lockfile 的含义是:锁文件与 package.json 对不上就直接失败,
+    保证本机装的与 CI 装的是同一棵依赖树。bun 会顺带执行本包的 postinstall(`max setup`)。
+  -->
+  <Target Name="BunInstall" BeforeTargets="CoreCompile"
+          Inputs="$(MSBuildProjectDirectory)\bun.lock"
+          Outputs="$(MSBuildProjectDirectory)\node_modules\.bun-install-stamp">
+    <Exec Command="bun install --frozen-lockfile" WorkingDirectory="$(MSBuildProjectDirectory)" />
+    <Touch Files="$(MSBuildProjectDirectory)\node_modules\.bun-install-stamp" AlwaysCreate="true" />
+  </Target>
 </Project>

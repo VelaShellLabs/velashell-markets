@@ -1,8 +1,16 @@
+# 镜像只需要 dist/ 与 nginx.conf.template —— 前端在本机打包(见 build/web.Dockerfile)。
+# 其余一律排除:上下文越小,VS 每次 F5 递给 BuildKit 的东西越少,也不会因为
+# 改了源码没重新打包、却看见上下文变了而误以为镜像已经更新。
 node_modules
-dist
+src
+config
+public
 .umi
 .umi-production
-# VS 工程文件只服务于解决方案,不参与镜像构建 —— 排除掉,免得 VS 碰一下它
-# 就让源码层缓存失效、白跑一遍前端打包。
+.omc
+package.json
+bun.lock
+tsconfig.json
+# VS 工程文件只服务于解决方案,不参与镜像构建。
 *.esproj
 *.esproj.user

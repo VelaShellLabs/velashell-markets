@@ -22,5 +22,8 @@
   </Folder>
   <Project Path="docker-compose.dcproj">
     <Build />
+    <!-- 前端产物 dist/ 由 Web 项目在本机打包,compose 只是把它装进 nginx 镜像。
+         这条依赖保证打镜像时 dist/ 已经是新的。 -->
+    <BuildDependency Project="src/VelaShell.Market.Web/VelaShell.Market.Web.esproj" />
   </Project>
 </Solution>

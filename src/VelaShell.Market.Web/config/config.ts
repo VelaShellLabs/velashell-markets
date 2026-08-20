@@ -27,6 +27,13 @@ export default defineConfig({
   routes,
   ignoreMomentLocale: true,
   /**
+   * @name esbuild 压缩产物包进 IIFE
+   * @description antd v6 自身是 esbuild 压缩过的,和 Umi 分片压缩后的 helper 撞名 ——
+   * 冷构建会死在 `[esbuildHelperChecker] Found conflicts in esbuild helpers`。
+   * 这是 Umi 在那条报错里给的解:把每个 chunk 包进 IIFE,helper 各自作用域,不再互相覆盖。
+   */
+  esbuildMinifyIIFE: true,
+  /**
    * @name 代理配置
    * @description 仅本地开发生效;容器里由 nginx 反代同一个 /api 前缀,前端代码两边一字不改。
    */
