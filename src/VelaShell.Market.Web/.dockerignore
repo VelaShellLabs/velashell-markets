@@ -4,13 +4,20 @@
 node_modules
 src
 config
+types
 public
 .umi
 .umi-production
 .omc
+obj
 package.json
 bun.lock
 tsconfig.json
+AGENTS.md
+.prettierrc
+.prettierignore
+.editorconfig
+.browserslistrc
 # VS 工程文件只服务于解决方案,不参与镜像构建。
 *.esproj
 *.esproj.user

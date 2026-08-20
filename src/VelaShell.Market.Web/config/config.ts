@@ -1,5 +1,5 @@
 // https://umijs.org/config/
-// 与 deeplogic.datacollector.webui 同一套 Umi Max + Ant Design Pro 架构。
+// 与参考项目 deeplogic.datacollector.webui 同一套 Umi Max + Ant Design Pro 架构。
 import { defineConfig } from '@umijs/max';
 import defaultSettings from './defaultSettings';
 import proxy from './proxy';
@@ -7,6 +7,13 @@ import routes from './routes';
 
 const { UMI_ENV = 'dev' } = process.env;
 const isProd = process.env.NODE_ENV === 'production';
+
+/**
+ * @name 部署路径
+ * @description 部署在非根目录下时要改这里;顶栏的首屏脚本也按它拼路径。
+ * @doc https://umijs.org/docs/api/config#publicpath
+ */
+const PUBLIC_PATH = '/';
 
 export default defineConfig({
   /**
@@ -17,7 +24,7 @@ export default defineConfig({
    */
   history: { type: 'browser' },
   hash: isProd,
-  publicPath: '/',
+  publicPath: PUBLIC_PATH,
   title: 'VelaShell 插件市场',
   favicons: ['/favicon.svg'],
   /**
@@ -60,7 +67,7 @@ export default defineConfig({
   /**
    * @name antd 插件
    * @description
-   * 这里**不再配 theme** —— 主题令牌搬到了运行期的 src/theme/index.ts(themeTokens),
+   * 这里**不再配 theme** —— 主题令牌搬到了运行期的 src/utils/theme.ts(themeTokens),
    * 因为它要随深浅色切换,而这份配置是构建期固定的。
    *
    * 留在这里的话还会反过来坏事:umi 的 ConfigProvider 在 rootContainer 那层主题的**内部**,
@@ -83,4 +90,11 @@ export default defineConfig({
    * @description 基于 initialState,见 src/access.ts。
    */
   access: {},
+  /**
+   * @name <head> 中额外的 script
+   * @description 首屏占位,解决 JS 到位前的白屏;脚本自己会读主题,暗色下不闪白。
+   */
+  // 路径用模板串拼,**不要用 node:path 的 join** —— 在 Windows 上它会产出
+  // 反斜杠分隔的路径,写进 index.html 后浏览器按相对路径解析,首屏脚本直接 404。
+  headScripts: [{ src: `${PUBLIC_PATH}scripts/loading.js`, async: true }],
 });

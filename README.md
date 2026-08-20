@@ -62,12 +62,17 @@ src/
 ├── VelaShell.Market.Infrastructure/  Mongo 上下文与索引、S3 存储、ClamAV、检测流水线
 ├── VelaShell.Market.Api/             HTTP API(最小 API)、OIDC 资源服务器、Markdown 渲染
 ├── VelaShell.Market.Identity/        统一认证(OpenIddict):授权码 + PKCE、账号与注册
-└── VelaShell.Market.Web/             前端(Umi Max + Ant Design Pro)
-    ├── config/                    路由即菜单、代理、ProLayout 默认外观、antd 主题令牌
-    ├── src/app.tsx                全局初始状态(当前用户)与 ProLayout 运行时配置
+└── VelaShell.Market.Web/             前端(Umi Max + Ant Design Pro,详见其 AGENTS.md)
+    ├── config/                    路由即菜单、代理、ProLayout 默认外观
+    ├── types/                     按服务域拆的全局 .d.ts:MarketAPI / MeAPI / ReviewsAPI / …
+    ├── public/scripts/loading.js  首屏占位,会读主题,暗色下不闪白
+    ├── src/app.tsx                根主题、全局初始状态(当前用户)、ProLayout 运行时配置
     ├── src/access.ts              权限(signedIn / canModerate),审核台入口据此显隐
+    ├── src/configs/               应用常量:分页、排序项、状态到标签的映射、storage key
+    ├── src/utils/                 theme(深浅色存储)、auth(OIDC)、format、request
+    ├── src/hooks/                 跨页面复用的状态机(分页表格)
     ├── src/services/              按域划分的接口层:market / reviews / me / uploads / moderation
-    ├── src/components/            插件图标、签名标签、检测报告
+    ├── src/components/            主题(Provider / Sync / Switch)、插件图标、签名与状态标签、检测报告
     └── src/pages/                 浏览 / 详情 / 发布 / 我的上传 / 我的插件 / 审核台
 tests/VelaShell.Market.Tests/         静态检测器的地面真值用例
 build/                                Dockerfile 与 SDK 同步脚本

@@ -1,8 +1,11 @@
-import { Findings } from '@/components';
+import { Findings, SignatureTag } from '@/components';
 import { approveVersion, getQueue, rejectVersion } from '@/services/moderation';
+import { formatDateTime, formatSize } from '@/utils/format';
 import { ReloadOutlined } from '@ant-design/icons';
+import { keepResult } from '@/utils/request';
+import { useRequest } from '@umijs/max';
 import { App, Button, Card, Descriptions, Empty, Skeleton, Space, Tag, Typography } from 'antd';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { askReason } from './askReason';
 
 /**
@@ -11,27 +14,17 @@ import { askReason } from './askReason';
  */
 export default function QueuePanel() {
   const api = App.useApp();
-  const [items, setItems] = useState<MarketAPI.PendingVersion[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
-  const load = async () => {
-    try {
-      setItems(await getQueue());
-    } catch {
-      setItems([]);
-    }
-  };
+  const { data, loading, refresh } = useRequest(getQueue, { formatResult: keepResult, onError: () => undefined });
+  const items = data ?? [];
 
-  useEffect(() => {
-    load();
-  }, []);
-
-  const approve = async (item: MarketAPI.PendingVersion) => {
+  const approve = async (item: ModerationAPI.PendingVersion) => {
     setBusy(item.id);
     try {
       await approveVersion(item.id);
       api.message.success(`${item.pluginId} ${item.version} 已放行`);
-      await load();
+      refresh();
     } catch {
       // 失败信息已由统一错误处理展示。
     } finally {
@@ -39,7 +32,7 @@ export default function QueuePanel() {
     }
   };
 
-  const reject = (item: MarketAPI.PendingVersion) =>
+  const reject = (item: ModerationAPI.PendingVersion) =>
     askReason(
       api,
       {
@@ -51,22 +44,20 @@ export default function QueuePanel() {
       async (reason) => {
         await rejectVersion(item.id, reason);
         api.message.success('已驳回');
-        await load();
+        refresh();
       },
     );
 
   return (
     <>
-      <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Typography.Text type="secondary">
-          这些包命中了需要人看一眼的项,在放行之前它们一直留在隔离区、不可下载。
-        </Typography.Text>
-        <Button icon={<ReloadOutlined />} onClick={load}>
+      <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }} wrap>
+        <Typography.Text type="secondary">这些包命中了需要人看一眼的项,在放行之前它们一直留在隔离区、不可下载。</Typography.Text>
+        <Button icon={<ReloadOutlined />} onClick={refresh} loading={loading}>
           刷新
         </Button>
       </Space>
 
-      {items === null ? (
+      {loading && !data ? (
         <Card>
           <Skeleton active paragraph={{ rows: 4 }} />
         </Card>
@@ -85,7 +76,7 @@ export default function QueuePanel() {
                   <Tag color="blue" bordered={false}>
                     v{item.version}
                   </Tag>
-                  <Tag bordered={false}>{item.signature}</Tag>
+                  <SignatureTag state={item.signature} />
                 </Space>
               }
               extra={
@@ -99,23 +90,14 @@ export default function QueuePanel() {
                 </Space>
               }
             >
-              <Descriptions
-                size="small"
-                column={{ xs: 1, sm: 2, md: 3 }}
-                colon={false}
-                style={{ marginBottom: 12 }}
-              >
+              <Descriptions size="small" column={{ xs: 1, sm: 2, md: 3 }} colon={false} style={{ marginBottom: 12 }}>
                 <Descriptions.Item label="上传者">
                   <Typography.Text code style={{ fontSize: 12 }}>
                     {item.uploadedBySubject}
                   </Typography.Text>
                 </Descriptions.Item>
-                <Descriptions.Item label="上传时间">
-                  {new Date(item.uploadedAt).toLocaleString()}
-                </Descriptions.Item>
-                <Descriptions.Item label="大小">
-                  {(item.packageSize / 1024 / 1024).toFixed(2)} MB
-                </Descriptions.Item>
+                <Descriptions.Item label="上传时间">{formatDateTime(item.uploadedAt)}</Descriptions.Item>
+                <Descriptions.Item label="大小">{formatSize(item.packageSize)}</Descriptions.Item>
               </Descriptions>
               <Findings findings={item.findings} />
             </Card>

@@ -1,21 +1,29 @@
-import { GithubOutlined, UserOutlined } from '@ant-design/icons';
+import { ThemeProvider, ThemeSwitch, ThemeSync, UserMenu } from '@/components';
+import { appName, repositoryUrl, version } from '@/configs';
+import { getProfile } from '@/services/me';
+import { getUser } from '@/utils/auth';
+import { getNavTheme } from '@/utils/theme';
+import { GithubOutlined } from '@ant-design/icons';
 import { type Settings as LayoutSettings } from '@ant-design/pro-components';
-import { history, type RequestConfig, type RunTimeLayoutConfig } from '@umijs/max';
-import { Avatar, Button, Dropdown } from 'antd';
+import { type RequestConfig, type RunTimeLayoutConfig } from '@umijs/max';
+import { Button } from 'antd';
+import type { ReactNode } from 'react';
 import defaultSettings from '../config/defaultSettings';
-import { ThemeSwitch } from './components';
 import { errorConfig } from './requestErrorConfig';
-import { getProfile } from './services/me';
-import { isDarkNow } from './theme';
-import ThemeProvider from './theme/ThemeProvider';
-import { getUser, login, logout } from './utils/auth';
+
+/** 全局初始状态的形状。useModel('@@initialState') 的类型由它推出来,页面里不用再 as any。 */
+export type InitialState = {
+  settings?: Partial<LayoutSettings>;
+  currentUser?: MeAPI.Profile | null;
+  fetchUserInfo?: () => Promise<MeAPI.Profile | null>;
+};
 
 /**
  * 整棵树最外面套一层主题。**必须在这里而不是页面里** —— message / modal / notification
  * 都是从根上挂出去的,包不住它们就会出现"页面暗了、弹窗还是亮的"。
  * @doc https://umijs.org/docs/api/runtime-config#rootcontainer
  */
-export function rootContainer(container: React.ReactNode) {
+export function rootContainer(container: ReactNode) {
   return <ThemeProvider>{container}</ThemeProvider>;
 }
 
@@ -23,12 +31,8 @@ export function rootContainer(container: React.ReactNode) {
  * 全局初始状态:当前登录用户。access.ts 用它算权限,布局用它渲染头像区。
  * @see https://umijs.org/docs/api/runtime-config#getinitialstate
  */
-export async function getInitialState(): Promise<{
-  settings?: Partial<LayoutSettings>;
-  currentUser?: MarketAPI.Profile | null;
-  fetchUserInfo?: () => Promise<MarketAPI.Profile | null>;
-}> {
-  const fetchUserInfo = async (): Promise<MarketAPI.Profile | null> => {
+export async function getInitialState(): Promise<InitialState> {
+  const fetchUserInfo = async (): Promise<MeAPI.Profile | null> => {
     // 先看本地有没有 OIDC 令牌,没有就不必打 /me —— 匿名浏览是常态,不该请求出一个 401。
     const user = await getUser();
     if (!user) return null;
@@ -42,7 +46,12 @@ export async function getInitialState(): Promise<{
   return {
     currentUser: await fetchUserInfo(),
     fetchUserInfo,
-    settings: defaultSettings as Partial<LayoutSettings>,
+    settings: {
+      ...defaultSettings,
+      // 首屏就按已保存的主题算出 navTheme,之后由 ThemeSync 跟着切。
+      // 不给初值的话,深色下顶栏会先白一帧再变暗。
+      navTheme: getNavTheme(),
+    } as Partial<LayoutSettings>,
   };
 }
 
@@ -50,55 +59,28 @@ export async function getInitialState(): Promise<{
  * ProLayout 运行时配置。
  * @doc https://procomponents.ant.design/components/layout
  */
-export const layout: RunTimeLayoutConfig = ({ initialState }) => {
-  const currentUser = (initialState as any)?.currentUser as MarketAPI.Profile | null | undefined;
-  // 顶栏的配色 ProLayout 自己管,不吃 antd 的暗色算法 —— 不跟着切的话,
-  // 深色顶栏上会留一排深色菜单文字,基本看不见。
-  const dark = isDarkNow();
-  return {
-    // 右上角:外观切换 + GitHub 入口 + 登录按钮/用户菜单。
-    actionsRender: () => [
-      <ThemeSwitch key="theme" />,
-      <Button
-        key="github"
-        type="text"
-        icon={<GithubOutlined />}
-        href="https://github.com/joesdu/VelaShell"
-        target="_blank"
-      />,
-      currentUser ? (
-        <Dropdown
-          key="user"
-          menu={{
-            items: [
-              { key: 'mine', label: '我的上传', onClick: () => history.push('/mine') },
-              { key: 'plugins', label: '我的插件', onClick: () => history.push('/owner') },
-              { type: 'divider' as const },
-              { key: 'logout', label: '退出登录', danger: true, onClick: () => logout() },
-            ],
-          }}
-        >
-          <span style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            <Avatar size="small" icon={<UserOutlined />} style={{ background: '#4f46e5' }} />
-            <span>{currentUser.name}</span>
-          </span>
-        </Dropdown>
-      ) : (
-        <Button key="login" type="primary" onClick={() => login()}>
-          登录
-        </Button>
-      ),
-    ],
-    footerRender: () => (
-      <div className="market-footer">VelaShell 插件市场 · 所有上传的 .vpx 均经隔离检测后才会发布</div>
-    ),
-    menuHeaderRender: undefined,
-    ...(initialState as any)?.settings,
-    // 必须放在展开**之后**:defaultSettings 里也有一个写死的 navTheme: 'light',
-    // 放在前面会被它盖掉,表现是深色下顶栏文字仍然是深的。
-    navTheme: dark ? 'realDark' : 'light',
-  };
-};
+export const layout: RunTimeLayoutConfig = ({ initialState }) => ({
+  // 右上角:外观切换 + 仓库入口 + 登录按钮/用户菜单。
+  actionsRender: () => [<ThemeSwitch key="theme" />, <Button key="repo" type="text" icon={<GithubOutlined />} href={repositoryUrl} target="_blank" aria-label="源码仓库" />, <UserMenu key="user" />],
+  footerRender: () => (
+    <div className="market-footer">
+      {appName} v{version} · 所有上传的 .vpx 均经隔离检测后才会发布
+    </div>
+  ),
+  menuHeaderRender: undefined,
+  /**
+   * ThemeSync 挂在这里(而不是页面里):它要 setInitialState,必须活在 initialState
+   * Provider 内部,而 childrenRender 正好在那一层里,又能跟着路由一直存在。
+   */
+  childrenRender: (children: ReactNode) => (
+    <>
+      <ThemeSync />
+      {children}
+    </>
+  ),
+  // 放在最后展开:navTheme 由 ThemeSync 写在 settings 里,前面的默认值不能盖掉它。
+  ...initialState?.settings,
+});
 
 /**
  * request 全局配置:Bearer 令牌注入与统一错误呈现,见 requestErrorConfig.ts。

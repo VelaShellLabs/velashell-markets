@@ -1,8 +1,11 @@
+import { PageShell } from '@/components';
 import { getMyPlugins, updatePlugin } from '@/services/me';
-import { EditOutlined } from '@ant-design/icons';
-import { history } from '@umijs/max';
-import { App, Button, Card, Drawer, Empty, Form, Input, Skeleton, Space, Table, Tag, Typography } from 'antd';
-import { useEffect, useState } from 'react';
+import { formatDateTime } from '@/utils/format';
+import { EditOutlined, ReloadOutlined } from '@ant-design/icons';
+import { keepResult } from '@/utils/request';
+import { history, useRequest } from '@umijs/max';
+import { App, Button, Card, Drawer, Empty, Form, Input, Skeleton, Space, Table, Tag, Tooltip, Typography } from 'antd';
+import { useState } from 'react';
 
 /**
  * 我的插件:改页面文案与标签。
@@ -12,20 +15,24 @@ import { useEffect, useState } from 'react';
  */
 export default function OwnerPage() {
   const { message } = App.useApp();
-  const [items, setItems] = useState<MarketAPI.MyPlugin[] | null>(null);
-  const [editing, setEditing] = useState<MarketAPI.MyPlugin | null>(null);
-  const [form] = Form.useForm();
+  const [form] = Form.useForm<MeAPI.PluginPatch>();
+  const [editing, setEditing] = useState<MeAPI.MyPlugin | null>(null);
 
-  const load = () =>
-    getMyPlugins()
-      .then(setItems)
-      .catch(() => setItems([]));
+  const { data, loading, refresh } = useRequest(getMyPlugins, { formatResult: keepResult, onError: () => undefined });
+  const items = data ?? [];
 
-  useEffect(() => {
-    load();
-  }, []);
+  const { run: save, loading: saving } = useRequest((values: MeAPI.PluginPatch) => updatePlugin(editing!.id, values), {
+    manual: true,
+    onSuccess: () => {
+      message.success('已保存');
+      setEditing(null);
+      refresh();
+    },
+    // 失败信息已由统一错误处理展示。
+    onError: () => undefined,
+  });
 
-  const openEditor = (plugin: MarketAPI.MyPlugin) => {
+  const openEditor = (plugin: MeAPI.MyPlugin) => {
     setEditing(plugin);
     form.setFieldsValue({
       descriptionMarkdown: plugin.descriptionMarkdown,
@@ -34,22 +41,17 @@ export default function OwnerPage() {
     });
   };
 
-  const save = async (values: any) => {
-    try {
-      await updatePlugin(editing!.id, values);
-      message.success('已保存');
-      setEditing(null);
-      await load();
-    } catch {
-      // 失败信息已由统一错误处理展示。
-    }
-  };
-
   return (
-    <div className="market-page">
-      <Typography.Title level={3}>我的插件</Typography.Title>
-
-      {items === null ? (
+    <PageShell
+      title="我的插件"
+      description="这里改的是插件页面的文案;id、版本与兼容信息取自包内的 plugin.json,改不了。"
+      extra={
+        <Button icon={<ReloadOutlined />} onClick={refresh}>
+          刷新
+        </Button>
+      }
+    >
+      {loading && !data ? (
         <Card>
           <Skeleton active paragraph={{ rows: 4 }} />
         </Card>
@@ -63,53 +65,50 @@ export default function OwnerPage() {
         </Card>
       ) : (
         <Card styles={{ body: { padding: 0 } }}>
-          <Table<MarketAPI.MyPlugin>
+          <Table<MeAPI.MyPlugin>
             rowKey="id"
             dataSource={items}
+            loading={loading}
             pagination={false}
             scroll={{ x: 720 }}
             columns={[
               {
                 title: '插件',
-                render: (_, r) => (
+                render: (_, row) => (
                   <Space direction="vertical" size={0}>
-                    <a onClick={() => history.push(`/plugins/${r.id}`)}>{r.displayName}</a>
+                    <a onClick={() => history.push(`/plugins/${row.id}`)}>{row.displayName}</a>
                     <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      {r.id}
+                      {row.id}
                     </Typography.Text>
                   </Space>
                 ),
               },
-              {
-                title: '最新版本',
-                dataIndex: 'latestVersion',
-                render: (v) => v ?? <Tag bordered={false}>未发布</Tag>,
-              },
+              { title: '最新版本', dataIndex: 'latestVersion', width: 110, render: (value) => (value ? <Tag bordered={false}>v{value}</Tag> : <Tag bordered={false}>未发布</Tag>) },
               { title: '下载', dataIndex: 'downloads', width: 90 },
-              {
-                title: '评分',
-                width: 120,
-                render: (_, r) => (r.ratingCount > 0 ? `${r.ratingAverage} (${r.ratingCount})` : '—'),
-              },
+              { title: '评分', width: 120, render: (_, row) => (row.ratingCount > 0 ? `${row.ratingAverage.toFixed(1)} (${row.ratingCount})` : '—') },
               {
                 title: '状态',
                 width: 110,
-                render: (_, r) =>
-                  r.isUnlisted ? (
-                    <Tag color="error" bordered={false}>
-                      已下架
-                    </Tag>
+                // 下架原因挂在标签上:作者最想知道的就是"为什么被下了"。
+                render: (_, row) =>
+                  row.isUnlisted ? (
+                    <Tooltip title={row.unlistedReason}>
+                      <Tag color="error" bordered={false}>
+                        已下架
+                      </Tag>
+                    </Tooltip>
                   ) : (
                     <Tag color="success" bordered={false}>
                       正常
                     </Tag>
                   ),
               },
+              { title: '更新于', dataIndex: 'updatedAt', width: 180, render: formatDateTime },
               {
                 title: '',
                 width: 90,
-                render: (_, r) => (
-                  <Button type="link" icon={<EditOutlined />} onClick={() => openEditor(r)}>
+                render: (_, row) => (
+                  <Button type="link" icon={<EditOutlined />} onClick={() => openEditor(row)}>
                     编辑
                   </Button>
                 ),
@@ -125,17 +124,13 @@ export default function OwnerPage() {
         open={!!editing}
         onClose={() => setEditing(null)}
         extra={
-          <Button type="primary" onClick={() => form.submit()}>
+          <Button type="primary" loading={saving} onClick={() => form.submit()}>
             保存
           </Button>
         }
       >
         <Form form={form} layout="vertical" onFinish={save}>
-          <Form.Item
-            name="descriptionMarkdown"
-            label="插件说明(Markdown)"
-            extra="名称、版本与兼容信息取自包内的 plugin.json,不能在这里改。"
-          >
+          <Form.Item name="descriptionMarkdown" label="插件说明(Markdown)" extra="名称、版本与兼容信息取自包内的 plugin.json,不能在这里改。">
             <Input.TextArea rows={16} />
           </Form.Item>
           <Form.Item name="tags" label="标签" extra="逗号分隔,最多 10 个">
@@ -146,6 +141,6 @@ export default function OwnerPage() {
           </Form.Item>
         </Form>
       </Drawer>
-    </div>
+    </PageShell>
   );
 }

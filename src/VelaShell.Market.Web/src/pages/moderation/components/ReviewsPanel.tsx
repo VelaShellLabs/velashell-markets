@@ -1,29 +1,12 @@
+import { REVIEW_SCOPES, REVIEW_SCOPE_FLAG, type ReviewScope } from '@/configs';
+import { usePagedTable } from '@/hooks';
 import { getModeratedReviews, hideReview, purgeReview, unhideReview } from '@/services/moderation';
+import { formatDateTime } from '@/utils/format';
 import { ReloadOutlined } from '@ant-design/icons';
-import {
-  App,
-  Button,
-  Empty,
-  Input,
-  Rate,
-  Segmented,
-  Space,
-  Table,
-  Tag,
-  Tooltip,
-  Typography,
-  type TableColumnsType,
-} from 'antd';
-import { useCallback, useEffect, useState } from 'react';
+import { App, Button, Empty, Input, Rate, Segmented, Space, Table, Tag, Tooltip, Typography, type TableColumnsType } from 'antd';
 import { askReason } from './askReason';
 
-type Scope = '全部' | '显示中' | '已隐藏';
-
-const SCOPE_TO_FLAG: Record<Scope, boolean | undefined> = {
-  全部: undefined,
-  显示中: false,
-  已隐藏: true,
-};
+type Filters = { q?: string; pluginId?: string; scope: ReviewScope };
 
 /**
  * 评价治理。两级处置:
@@ -36,40 +19,13 @@ const SCOPE_TO_FLAG: Record<Scope, boolean | undefined> = {
  */
 export default function ReviewsPanel() {
   const api = App.useApp();
-  const [rows, setRows] = useState<MarketAPI.ModeratedReview[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [size, setSize] = useState(20);
-  const [q, setQ] = useState('');
-  const [pluginId, setPluginId] = useState('');
-  const [scope, setScope] = useState<Scope>('全部');
-  const [loading, setLoading] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await getModeratedReviews({
-        q: q || undefined,
-        pluginId: pluginId || undefined,
-        hidden: SCOPE_TO_FLAG[scope],
-        page,
-        size,
-      });
-      setRows(data.items);
-      setTotal(data.total);
-    } catch {
-      setRows([]);
-      setTotal(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [q, pluginId, scope, page, size]);
+  const { rows, loading, filters, setFilters, reload, pagination } = usePagedTable<ModerationAPI.ModeratedReview, Filters>(
+    ({ q, pluginId, scope, page, size }) => getModeratedReviews({ q: q || undefined, pluginId: pluginId || undefined, hidden: REVIEW_SCOPE_FLAG[scope], page, size }),
+    { scope: '全部' },
+  );
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const hide = (row: MarketAPI.ModeratedReview) =>
+  const hide = (row: ModerationAPI.ModeratedReview) =>
     askReason(
       api,
       {
@@ -81,11 +37,11 @@ export default function ReviewsPanel() {
       async (reason) => {
         await hideReview(row.id, reason);
         api.message.success('已隐藏');
-        await load();
+        reload();
       },
     );
 
-  const unhide = (row: MarketAPI.ModeratedReview) =>
+  const unhide = (row: ModerationAPI.ModeratedReview) =>
     api.modal.confirm({
       title: '取消隐藏',
       content: '这条评价会重新出现在插件页,并重新计入评分均值。',
@@ -94,11 +50,11 @@ export default function ReviewsPanel() {
       onOk: async () => {
         await unhideReview(row.id);
         api.message.success('已取消隐藏');
-        await load();
+        reload();
       },
     });
 
-  const purge = (row: MarketAPI.ModeratedReview) =>
+  const purge = (row: ModerationAPI.ModeratedReview) =>
     askReason(
       api,
       {
@@ -111,18 +67,19 @@ export default function ReviewsPanel() {
       async (reason) => {
         await purgeReview(row.id, reason);
         api.message.success('已彻底删除');
-        await load();
+        reload();
       },
     );
 
-  const columns: TableColumnsType<MarketAPI.ModeratedReview> = [
+  const columns: TableColumnsType<ModerationAPI.ModeratedReview> = [
     {
       title: '插件',
       dataIndex: 'pluginId',
       width: 180,
-      render: (v: string) => (
-        <Typography.Link onClick={() => setPluginId(v)} code style={{ fontSize: 12 }}>
-          {v}
+      // 点插件 id 即把它填进过滤框:顺着一条差评去看这个插件的全部评价是最常见的动作。
+      render: (value: string) => (
+        <Typography.Link onClick={() => setFilters({ pluginId: value })} code style={{ fontSize: 12 }}>
+          {value}
         </Typography.Link>
       ),
     },
@@ -138,12 +95,7 @@ export default function ReviewsPanel() {
         </Space>
       ),
     },
-    {
-      title: '评分',
-      dataIndex: 'rating',
-      width: 120,
-      render: (v: number) => <Rate disabled value={v} style={{ fontSize: 12 }} />,
-    },
+    { title: '评分', dataIndex: 'rating', width: 120, render: (value: number) => <Rate disabled value={value} style={{ fontSize: 12 }} /> },
     {
       title: '正文',
       dataIndex: 'body',
@@ -151,7 +103,7 @@ export default function ReviewsPanel() {
         <Space direction="vertical" size={4} style={{ width: '100%' }}>
           <Space size={8} wrap>
             {row.isHidden ? (
-              <Tooltip title={`${row.hiddenReason ?? ''}（${row.hiddenBySubject ?? '未知审核员'}）`}>
+              <Tooltip title={`${row.hiddenReason ?? ''}(${row.hiddenBySubject ?? '未知审核员'})`}>
                 <Tag color="red" bordered={false}>
                   已隐藏
                 </Tag>
@@ -163,14 +115,10 @@ export default function ReviewsPanel() {
               </Tag>
             ) : null}
             <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-              {new Date(row.updatedAt).toLocaleString()}
+              {formatDateTime(row.updatedAt)}
             </Typography.Text>
           </Space>
-          <Typography.Paragraph
-            type={row.body ? undefined : 'secondary'}
-            style={{ whiteSpace: 'pre-wrap', margin: 0 }}
-            ellipsis={{ rows: 4, expandable: true, symbol: '展开' }}
-          >
+          <Typography.Paragraph type={row.body ? undefined : 'secondary'} style={{ whiteSpace: 'pre-wrap', margin: 0 }} ellipsis={{ rows: 4, expandable: true, symbol: '展开' }}>
             {row.body || '(只打分,没有正文)'}
           </Typography.Paragraph>
         </Space>
@@ -202,57 +150,23 @@ export default function ReviewsPanel() {
     <>
       <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }} wrap>
         <Space wrap>
-          <Input.Search
-            allowClear
-            placeholder="搜索正文 / 昵称 / sub"
-            style={{ width: 260 }}
-            onSearch={(value) => {
-              setPage(1);
-              setQ(value);
-            }}
-          />
-          <Input
-            allowClear
-            placeholder="按插件 id 过滤"
-            style={{ width: 200 }}
-            value={pluginId}
-            onChange={(e) => {
-              setPage(1);
-              setPluginId(e.target.value);
-            }}
-          />
-          <Segmented
-            value={scope}
-            options={['全部', '显示中', '已隐藏']}
-            onChange={(value) => {
-              setPage(1);
-              setScope(value as Scope);
-            }}
-          />
+          <Input.Search allowClear placeholder="搜索正文 / 昵称 / sub" style={{ width: 260 }} onSearch={(value) => setFilters({ q: value })} />
+          <Input allowClear placeholder="按插件 id 过滤" style={{ width: 200 }} value={filters.pluginId ?? ''} onChange={(e) => setFilters({ pluginId: e.target.value })} />
+          <Segmented value={filters.scope} options={REVIEW_SCOPES as unknown as string[]} onChange={(value) => setFilters({ scope: value as ReviewScope })} />
         </Space>
-        <Button icon={<ReloadOutlined />} onClick={load}>
+        <Button icon={<ReloadOutlined />} onClick={reload} loading={loading}>
           刷新
         </Button>
       </Space>
 
-      <Table<MarketAPI.ModeratedReview>
+      <Table<ModerationAPI.ModeratedReview>
         rowKey="id"
         size="small"
         loading={loading}
         columns={columns}
         dataSource={rows}
         locale={{ emptyText: <Empty description="没有匹配的评价" /> }}
-        pagination={{
-          current: page,
-          pageSize: size,
-          total,
-          showSizeChanger: true,
-          showTotal: (n) => `共 ${n} 条评价`,
-          onChange: (nextPage, nextSize) => {
-            setPage(nextPage);
-            setSize(nextSize);
-          },
-        }}
+        pagination={{ ...pagination, showTotal: (n) => `共 ${n} 条评价` }}
       />
     </>
   );

@@ -1,0 +1,1 @@
+export { usePagedTable } from './usePagedTable';

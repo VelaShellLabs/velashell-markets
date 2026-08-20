@@ -1,0 +1,7 @@
+[production]
+> 1%
+
+[modern]
+last 2 versions
+not ie <= 10
+not dead

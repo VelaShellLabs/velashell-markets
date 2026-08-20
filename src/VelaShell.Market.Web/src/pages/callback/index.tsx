@@ -1,7 +1,7 @@
-import { history, useModel } from '@umijs/max';
-import { Button, Result, Spin } from 'antd';
-import { useEffect, useState } from 'react';
 import { completeLogin } from '@/utils/auth';
+import { history, useModel } from '@umijs/max';
+import { Button, Result, Spin, Typography } from 'antd';
+import { useEffect, useState } from 'react';
 
 /**
  * OIDC 登录回调:用授权码换取令牌、刷新全局用户状态后回首页。
@@ -19,10 +19,12 @@ export default function CallbackPage() {
       .then(async () => {
         // 令牌已落地,把 currentUser 灌进全局状态,导航栏立刻变成已登录形态。
         const currentUser = (await initialState?.fetchUserInfo?.()) ?? null;
-        await setInitialState((s: any) => ({ ...s, currentUser }));
+        await setInitialState((state) => ({ ...state, currentUser }));
         history.replace('/');
       })
       .catch((e: Error) => setError(e.message));
+    // 只在挂载时跑一次:授权码是一次性的,重复兑换必然失败。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (error) {
@@ -37,15 +39,15 @@ export default function CallbackPage() {
           </Button>,
         ]}
       >
-        <p style={{ color: '#667085' }}>
-          最常见的原因是本站的 redirect_uri 不在认证服务的白名单里(它由 <code>WEB_ORIGIN</code> 决定)。
-          配置方式见仓库文档 <code>docs/identity-integration.md</code>。
-        </p>
+        <Typography.Paragraph type="secondary">
+          最常见的原因是本站的 redirect_uri 不在认证服务的白名单里(它由 <code>WEB_ORIGIN</code> 决定)。配置方式见仓库文档 <code>docs/identity-integration.md</code>。
+        </Typography.Paragraph>
       </Result>
     );
   }
+
   return (
-    <div style={{ padding: '120px 0', textAlign: 'center' }}>
+    <div className="market-center-stage">
       <Spin size="large" tip="登录中…">
         <div style={{ height: 40 }} />
       </Spin>

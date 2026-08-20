@@ -1,56 +1,42 @@
+import { PLUGIN_PAGE_SIZE, SORT_OPTIONS } from '@/configs';
 import { listPlugins, listTags } from '@/services/market';
 import { TagsOutlined } from '@ant-design/icons';
+import { keepResult } from '@/utils/request';
+import { useRequest } from '@umijs/max';
 import { Card, Col, Empty, Input, Pagination, Row, Segmented, Skeleton, Space, Tag, Typography } from 'antd';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import PluginCard from './components/PluginCard';
-
-// 一页 24 个:内容区铺满窗口后一行能排 4–6 张卡片,12 个只够两三行,翻页太频繁。
-const SIZE = 24;
 
 /** 浏览页:搜索 + 标签过滤 + 排序 + 分页。 */
 export default function MarketPage() {
-  const [data, setData] = useState<MarketAPI.PluginPage | null>(null);
-  const [tags, setTags] = useState<MarketAPI.TagCount[]>([]);
-  const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
   const [tag, setTag] = useState<string | undefined>();
-  const [sort, setSort] = useState('updated');
+  const [sort, setSort] = useState<string>(SORT_OPTIONS[0].value);
   const [page, setPage] = useState(1);
 
-  useEffect(() => {
-    listTags()
-      .then(setTags)
-      .catch(() => setTags([]));
-  }, []);
+  // 标签只在首屏拉一次:它随插件增减而变,但没必要跟着每次翻页重来。
+  const { data: tags } = useRequest(listTags, { formatResult: keepResult, onError: () => undefined });
 
-  useEffect(() => {
-    setLoading(true);
-    listPlugins({ q: q || undefined, tag, sort, page, size: SIZE })
-      .then(setData)
-      .catch(() => setData({ total: 0, page: 1, size: SIZE, items: [] }))
-      .finally(() => setLoading(false));
-  }, [q, tag, sort, page]);
+  const { data, loading } = useRequest(() => listPlugins({ q: q || undefined, tag, sort, page, size: PLUGIN_PAGE_SIZE }), {
+    formatResult: keepResult,
+    refreshDeps: [q, tag, sort, page],
+    onError: () => undefined,
+  });
 
-  const reset = (fn: () => void) => {
-    // 换搜索词/标签/排序都要回第一页 —— 停在第 5 页看空列表是最常见的"以为没数据"。
+  /** 换搜索词/标签/排序都要回第一页 —— 停在第 5 页看空列表是最常见的"以为没数据"。 */
+  const reset = (apply: () => void) => {
     setPage(1);
-    fn();
+    apply();
   };
 
-  const hasTags = tags.length > 0;
+  const hasTags = !!tags?.length;
 
   return (
     <div className="market-page">
       <div className="market-hero">
         <h1>为 VelaShell 找一个插件</h1>
         <p>所有插件都经过容器校验、结构检查与病毒扫描后才会上架。</p>
-        <Input.Search
-          size="large"
-          placeholder="搜索插件名称、id 或简介…"
-          allowClear
-          onSearch={(value) => reset(() => setQ(value))}
-          style={{ maxWidth: 520 }}
-        />
+        <Input.Search size="large" placeholder="搜索插件名称、id 或简介…" allowClear onSearch={(value) => reset(() => setQ(value))} style={{ maxWidth: 520 }} />
       </div>
 
       <Row gutter={24}>
@@ -72,13 +58,9 @@ export default function MarketPage() {
                 <Tag.CheckableTag checked={!tag} onChange={() => reset(() => setTag(undefined))}>
                   全部
                 </Tag.CheckableTag>
-                {tags.map((t) => (
-                  <Tag.CheckableTag
-                    key={t.tag}
-                    checked={tag === t.tag}
-                    onChange={(checked) => reset(() => setTag(checked ? t.tag : undefined))}
-                  >
-                    {t.tag} · {t.count}
+                {tags!.map((item) => (
+                  <Tag.CheckableTag key={item.tag} checked={tag === item.tag} onChange={(checked) => reset(() => setTag(checked ? item.tag : undefined))}>
+                    {item.tag} · {item.count}
                   </Tag.CheckableTag>
                 ))}
               </Space>
@@ -88,25 +70,14 @@ export default function MarketPage() {
 
         <Col xs={24} md={hasTags ? 18 : 24} xl={hasTags ? 19 : 24}>
           <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }} wrap>
-            <Typography.Text type="secondary">
-              {loading ? '加载中…' : `共 ${data?.total ?? 0} 个插件`}
-            </Typography.Text>
-            <Segmented
-              value={sort}
-              onChange={(value) => reset(() => setSort(value as string))}
-              options={[
-                { label: '最近更新', value: 'updated' },
-                { label: '下载最多', value: 'downloads' },
-                { label: '评分最高', value: 'rating' },
-                { label: '最新发布', value: 'created' },
-              ]}
-            />
+            <Typography.Text type="secondary">{loading ? '加载中…' : `共 ${data?.total ?? 0} 个插件`}</Typography.Text>
+            <Segmented value={sort} onChange={(value) => reset(() => setSort(value as string))} options={SORT_OPTIONS as unknown as { label: string; value: string }[]} />
           </Space>
 
           {loading ? (
             <div className="plugin-grid">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <Card key={i}>
+              {Array.from({ length: 8 }).map((_, index) => (
+                <Card key={index}>
                   <Skeleton active avatar={{ shape: 'square', size: 48 }} paragraph={{ rows: 2 }} />
                 </Card>
               ))}
@@ -114,25 +85,14 @@ export default function MarketPage() {
           ) : data && data.items.length > 0 ? (
             <>
               <div className="plugin-grid">
-                {data.items.map((p) => (
-                  <PluginCard key={p.id} plugin={p} />
+                {data.items.map((plugin) => (
+                  <PluginCard key={plugin.id} plugin={plugin} />
                 ))}
               </div>
-              <Pagination
-                style={{ marginTop: 24 }}
-                align="center"
-                current={data.page}
-                pageSize={data.size}
-                total={data.total}
-                showSizeChanger={false}
-                onChange={setPage}
-              />
+              <Pagination style={{ marginTop: 24 }} align="center" current={data.page} pageSize={data.size} total={data.total} showSizeChanger={false} onChange={setPage} />
             </>
           ) : (
-            <Empty
-              style={{ padding: '64px 0' }}
-              description={q || tag ? '没有匹配的插件' : '市场还没有插件,来发布第一个吧'}
-            />
+            <Empty style={{ padding: '64px 0' }} description={q || tag ? '没有匹配的插件' : '市场还没有插件,来发布第一个吧'} />
           )}
         </Col>
       </Row>

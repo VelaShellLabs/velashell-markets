@@ -1,34 +1,12 @@
-import {
-  clearPluginDescription,
-  getModeratedPlugins,
-  relistPlugin,
-  takedownPlugin,
-  unlistPlugin,
-} from '@/services/moderation';
+import { PLUGIN_SCOPES, PLUGIN_SCOPE_FLAG, type PluginScope } from '@/configs';
+import { usePagedTable } from '@/hooks';
+import { clearPluginDescription, getModeratedPlugins, relistPlugin, takedownPlugin, unlistPlugin } from '@/services/moderation';
+import { formatDateTime } from '@/utils/format';
 import { ReloadOutlined } from '@ant-design/icons';
-import {
-  App,
-  Button,
-  Empty,
-  Input,
-  Segmented,
-  Space,
-  Table,
-  Tag,
-  Tooltip,
-  Typography,
-  type TableColumnsType,
-} from 'antd';
-import { useCallback, useEffect, useState } from 'react';
+import { App, Button, Empty, Input, Segmented, Space, Table, Tag, Tooltip, Typography, type TableColumnsType } from 'antd';
 import { askReason } from './askReason';
 
-type Scope = '全部' | '已上架' | '已下架';
-
-const SCOPE_TO_FLAG: Record<Scope, boolean | undefined> = {
-  全部: undefined,
-  已上架: false,
-  已下架: true,
-};
+type Filters = { q?: string; scope: PluginScope };
 
 /**
  * 插件治理。与浏览页最大的差别:**这里看得见已下架的条目** ——
@@ -36,55 +14,29 @@ const SCOPE_TO_FLAG: Record<Scope, boolean | undefined> = {
  */
 export default function PluginsPanel() {
   const api = App.useApp();
-  const [rows, setRows] = useState<MarketAPI.ModeratedPlugin[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [size, setSize] = useState(20);
-  const [q, setQ] = useState('');
-  const [scope, setScope] = useState<Scope>('全部');
-  const [loading, setLoading] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await getModeratedPlugins({
-        q: q || undefined,
-        unlisted: SCOPE_TO_FLAG[scope],
-        page,
-        size,
-      });
-      setRows(data.items);
-      setTotal(data.total);
-    } catch {
-      setRows([]);
-      setTotal(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [q, scope, page, size]);
+  const { rows, loading, filters, setFilters, reload, pagination } = usePagedTable<ModerationAPI.ModeratedPlugin, Filters>(
+    ({ q, scope, page, size }) => getModeratedPlugins({ q: q || undefined, unlisted: PLUGIN_SCOPE_FLAG[scope], page, size }),
+    { scope: '全部' },
+  );
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const unlist = (row: MarketAPI.ModeratedPlugin) =>
+  const unlist = (row: ModerationAPI.ModeratedPlugin) =>
     askReason(
       api,
       {
         title: `软下架 ${row.id}`,
-        description:
-          '插件从检索与详情页消失,但正式桶里的包仍然可以下载,已装用户不受影响。有害的包请用「强制下架」。',
+        description: '插件从检索与详情页消失,但正式桶里的包仍然可以下载,已装用户不受影响。有害的包请用「强制下架」。',
         placeholder: '下架原因(展示给作者)',
         okText: '下架',
       },
       async (reason) => {
         await unlistPlugin(row.id, reason);
         api.message.success('已下架');
-        await load();
+        reload();
       },
     );
 
-  const takedown = (row: MarketAPI.ModeratedPlugin) =>
+  const takedown = (row: ModerationAPI.ModeratedPlugin) =>
     askReason(
       api,
       {
@@ -102,9 +54,7 @@ export default function PluginsPanel() {
             title: '部分对象未能删除',
             content: (
               <Space direction="vertical" size={8}>
-                <Typography.Text>
-                  已删除 {result.deletedVersions} 个版本,以下对象删除失败,需要到对象存储里手工清理:
-                </Typography.Text>
+                <Typography.Text>已删除 {result.deletedVersions} 个版本,以下对象删除失败,需要到对象存储里手工清理:</Typography.Text>
                 <Typography.Text code copyable>
                   {result.failedKeys.join('\n')}
                 </Typography.Text>
@@ -112,47 +62,42 @@ export default function PluginsPanel() {
             ),
           });
         } else {
-          api.message.success(
-            `已强制下架:删除 ${result.deletedVersions} 个已发布版本、封停 ${result.blockedVersions} 个待检版本`,
-          );
+          api.message.success(`已强制下架:删除 ${result.deletedVersions} 个已发布版本、封停 ${result.blockedVersions} 个待检版本`);
         }
-        await load();
+        reload();
       },
     );
 
-  const relist = (row: MarketAPI.ModeratedPlugin) =>
+  const relist = (row: ModerationAPI.ModeratedPlugin) =>
     api.modal.confirm({
       title: `恢复上架 ${row.id}`,
-      content: row.latestVersion
-        ? '插件将重新出现在检索与详情页。'
-        : '注意:这个插件没有任何已发布版本(可能被强制下架过),恢复出来是个空壳页面,需要作者重新发版。',
+      content: row.latestVersion ? '插件将重新出现在检索与详情页。' : '注意:这个插件没有任何已发布版本(可能被强制下架过),恢复出来是个空壳页面,需要作者重新发版。',
       okText: '恢复上架',
       cancelText: '取消',
       onOk: async () => {
         await relistPlugin(row.id);
         api.message.success('已恢复上架');
-        await load();
+        reload();
       },
     });
 
-  const clearDescription = (row: MarketAPI.ModeratedPlugin) =>
+  const clearDescription = (row: ModerationAPI.ModeratedPlugin) =>
     askReason(
       api,
       {
         title: `清空 ${row.id} 的描述`,
-        description:
-          '只清描述,插件继续可用。原因会显示在插件页上,作者重写描述后这条说明自动消失。',
+        description: '只清描述,插件继续可用。原因会显示在插件页上,作者重写描述后这条说明自动消失。',
         placeholder: '移除原因(展示给作者与读者)',
         okText: '清空描述',
       },
       async (reason) => {
         await clearPluginDescription(row.id, reason);
         api.message.success('描述已清空');
-        await load();
+        reload();
       },
     );
 
-  const columns: TableColumnsType<MarketAPI.ModeratedPlugin> = [
+  const columns: TableColumnsType<ModerationAPI.ModeratedPlugin> = [
     {
       title: '插件',
       dataIndex: 'id',
@@ -198,12 +143,7 @@ export default function PluginsPanel() {
       title: '最新版本',
       dataIndex: 'latestVersion',
       width: 110,
-      render: (v: string | undefined) =>
-        v ? (
-          <Tag bordered={false}>v{v}</Tag>
-        ) : (
-          <Typography.Text type="secondary">无</Typography.Text>
-        ),
+      render: (value: string | undefined) => (value ? <Tag bordered={false}>v{value}</Tag> : <Typography.Text type="secondary">无</Typography.Text>),
     },
     {
       title: '下载 / 评分',
@@ -243,30 +183,15 @@ export default function PluginsPanel() {
     <>
       <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }} wrap>
         <Space wrap>
-          <Input.Search
-            allowClear
-            placeholder="搜索插件 id / 名称 / 作者 sub"
-            style={{ width: 280 }}
-            onSearch={(value) => {
-              setPage(1);
-              setQ(value);
-            }}
-          />
-          <Segmented
-            value={scope}
-            options={['全部', '已上架', '已下架']}
-            onChange={(value) => {
-              setPage(1);
-              setScope(value as Scope);
-            }}
-          />
+          <Input.Search allowClear placeholder="搜索插件 id / 名称 / 作者 sub" style={{ width: 280 }} onSearch={(value) => setFilters({ q: value })} />
+          <Segmented value={filters.scope} options={PLUGIN_SCOPES as unknown as string[]} onChange={(value) => setFilters({ scope: value as PluginScope })} />
         </Space>
-        <Button icon={<ReloadOutlined />} onClick={load}>
+        <Button icon={<ReloadOutlined />} onClick={reload} loading={loading}>
           刷新
         </Button>
       </Space>
 
-      <Table<MarketAPI.ModeratedPlugin>
+      <Table<ModerationAPI.ModeratedPlugin>
         rowKey="id"
         size="small"
         loading={loading}
@@ -279,30 +204,16 @@ export default function PluginsPanel() {
             <Space direction="vertical" size={8} style={{ width: '100%' }}>
               {row.descriptionRemovedReason ? (
                 <Typography.Text type="warning">
-                  描述已于 {new Date(row.descriptionRemovedAt!).toLocaleString()} 被移除:
-                  {row.descriptionRemovedReason}
+                  描述已于 {formatDateTime(row.descriptionRemovedAt)} 被移除:{row.descriptionRemovedReason}
                 </Typography.Text>
               ) : null}
-              <Typography.Paragraph
-                type={row.descriptionMarkdown ? undefined : 'secondary'}
-                style={{ whiteSpace: 'pre-wrap', margin: 0 }}
-              >
+              <Typography.Paragraph type={row.descriptionMarkdown ? undefined : 'secondary'} style={{ whiteSpace: 'pre-wrap', margin: 0 }}>
                 {row.descriptionMarkdown || '(没有描述)'}
               </Typography.Paragraph>
             </Space>
           ),
         }}
-        pagination={{
-          current: page,
-          pageSize: size,
-          total,
-          showSizeChanger: true,
-          showTotal: (n) => `共 ${n} 个插件`,
-          onChange: (nextPage, nextSize) => {
-            setPage(nextPage);
-            setSize(nextSize);
-          },
-        }}
+        pagination={{ ...pagination, showTotal: (n) => `共 ${n} 个插件` }}
       />
     </>
   );

@@ -21,11 +21,7 @@ export type ReasonPromptOptions = {
  * 不给原因就等于让人盲目猜。原因去向各不相同(有的展示给作者、有的只进服务端日志),
  * 但"必须写"这条对五个动作是一样的,所以集中在这里,不在每个面板里各写一遍。
  */
-export function askReason(
-  api: Pick<AppApi, 'modal' | 'message'>,
-  options: ReasonPromptOptions,
-  onConfirm: (reason: string) => Promise<void>,
-) {
+export function askReason(api: Pick<AppApi, 'modal' | 'message'>, options: ReasonPromptOptions, onConfirm: (reason: string) => Promise<void>) {
   // 受控 state 会让每次输入都重渲整个 Modal;这里只需要在点确定时读一次最终值。
   let reason = '';
   api.modal.confirm({
@@ -35,16 +31,8 @@ export function askReason(
     content: (
       <Space direction="vertical" size={12} style={{ width: '100%', marginTop: 8 }}>
         {options.danger ? <Alert type="error" showIcon message={options.danger} /> : null}
-        {options.description ? (
-          <Typography.Text type="secondary">{options.description}</Typography.Text>
-        ) : null}
-        <Input.TextArea
-          rows={3}
-          placeholder={options.placeholder}
-          maxLength={500}
-          showCount
-          onChange={(e) => (reason = e.target.value)}
-        />
+        {options.description ? <Typography.Text type="secondary">{options.description}</Typography.Text> : null}
+        <Input.TextArea rows={3} placeholder={options.placeholder} maxLength={500} showCount onChange={(e) => (reason = e.target.value)} />
       </Space>
     ),
     okText: options.okText,

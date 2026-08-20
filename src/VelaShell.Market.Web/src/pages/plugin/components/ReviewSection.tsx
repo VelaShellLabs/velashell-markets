@@ -1,21 +1,22 @@
+import { REVIEW_PAGE_SIZE } from '@/configs';
 import { deleteReview, getMyReview, listReviews, upsertReview } from '@/services/reviews';
-import { EditOutlined, UserOutlined } from '@ant-design/icons';
-import { useModel } from '@umijs/max';
-import {
-  App, Avatar, Button, Card, Divider, Empty, Form, Input, List, Pagination, Popconfirm, Rate, Space, Tag, Typography,
-} from 'antd';
-import { useEffect, useState } from 'react';
 import { login } from '@/utils/auth';
-
-const SIZE = 10;
+import { formatDateTime } from '@/utils/format';
+import { EditOutlined, UserOutlined } from '@ant-design/icons';
+import { keepResult } from '@/utils/request';
+import { useModel, useRequest } from '@umijs/max';
+import { App, Avatar, Button, Card, Divider, Empty, Form, Input, List, Pagination, Popconfirm, Rate, Space, Tag, Typography, theme } from 'antd';
+import { useState } from 'react';
 
 /** 应用商店式评分汇总:左边大均分与总数,右边 5→1 星分布条。 */
 function RatingSummary({ distribution }: { distribution: Record<string, number> }) {
   const counts = [5, 4, 3, 2, 1].map((star) => ({ star, count: distribution[String(star)] ?? 0 }));
-  const total = counts.reduce((sum, c) => sum + c.count, 0);
+  const total = counts.reduce((sum, item) => sum + item.count, 0);
   if (total === 0) return null;
-  const average = counts.reduce((sum, c) => sum + c.star * c.count, 0) / total;
-  const max = Math.max(...counts.map((c) => c.count));
+
+  const average = counts.reduce((sum, item) => sum + item.star * item.count, 0) / total;
+  const max = Math.max(...counts.map((item) => item.count));
+
   return (
     <div className="review-summary">
       <div className="review-summary-score">
@@ -50,60 +51,47 @@ function RatingSummary({ distribution }: { distribution: Record<string, number> 
  */
 export default function ReviewSection({ pluginId, isOwner }: { pluginId: string; isOwner: boolean }) {
   const { message } = App.useApp();
+  const { token } = theme.useToken();
   const { initialState } = useModel('@@initialState');
   const signedIn = !!initialState?.currentUser;
-  const [form] = Form.useForm();
-  const [items, setItems] = useState<MarketAPI.Review[]>([]);
-  const [total, setTotal] = useState(0);
-  const [distribution, setDistribution] = useState<Record<string, number>>({});
+
+  const [form] = Form.useForm<{ rating: number; body?: string }>();
   const [page, setPage] = useState(1);
-  const [mine, setMine] = useState<MarketAPI.MyReview | null>(null);
   const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
 
-  const loadList = () =>
-    listReviews(pluginId, { page, size: SIZE }).then((d) => {
-      setItems(d.items ?? []);
-      setTotal(d.total ?? 0);
-      setDistribution(d.distribution ?? {});
-    });
+  const { data: reviews, refresh: refreshList } = useRequest(() => listReviews(pluginId, { page, size: REVIEW_PAGE_SIZE }), {
+    formatResult: keepResult,
+    refreshDeps: [pluginId, page],
+    onError: () => undefined,
+  });
 
-  const loadMine = async () => {
-    if (!signedIn) return;
-    try {
-      const data = await getMyReview(pluginId);
-      setMine(data);
-      if (data) {
-        form.setFieldsValue({ rating: data.rating, body: data.body });
-      } else {
-        form.resetFields();
-      }
-    } catch {
-      setMine(null);
-    }
-  };
+  /**
+   * 我的那条评价。匿名访客与插件作者都不必问 —— 前者拿不到,后者根本不能评。
+   * 拉回来后顺手把表单填上,点「编辑」时不用再等一次请求。
+   */
+  const {
+    data: mine,
+    refresh: refreshMine,
+    mutate: setMine,
+  } = useRequest(() => getMyReview(pluginId), {
+    formatResult: keepResult,
+    ready: signedIn && !isOwner,
+    refreshDeps: [pluginId],
+    onSuccess: (data) => (data ? form.setFieldsValue({ rating: data.rating, body: data.body }) : form.resetFields()),
+    onError: () => undefined,
+  });
 
-  useEffect(() => {
-    loadList();
-  }, [pluginId, page]);
-
-  useEffect(() => {
-    loadMine();
-  }, [pluginId, signedIn]);
-
-  const submit = async (values: { rating: number; body?: string }) => {
-    setSaving(true);
-    try {
-      await upsertReview(pluginId, { rating: values.rating, body: values.body ?? null });
+  const { run: submit, loading: saving } = useRequest((values: { rating: number; body?: string }) => upsertReview(pluginId, { rating: values.rating, body: values.body ?? null }), {
+    manual: true,
+    onSuccess: () => {
       message.success(mine ? '评价已更新' : '感谢你的评价');
       setEditing(false);
-      await Promise.all([loadList(), loadMine()]);
-    } catch {
-      // 失败信息已由统一错误处理展示。
-    } finally {
-      setSaving(false);
-    }
-  };
+      refreshList();
+      refreshMine();
+    },
+    // 失败信息已由统一错误处理展示。
+    onError: () => undefined,
+  });
 
   const remove = async () => {
     await deleteReview(pluginId);
@@ -111,16 +99,18 @@ export default function ReviewSection({ pluginId, isOwner }: { pluginId: string;
     setMine(null);
     setEditing(false);
     form.resetFields();
-    await loadList();
+    refreshList();
   };
 
+  const total = reviews?.total ?? 0;
+  const items = reviews?.items ?? [];
   const showForm = signedIn && !isOwner && (!mine || editing);
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       {total > 0 ? (
         <Card size="small">
-          <RatingSummary distribution={distribution} />
+          <RatingSummary distribution={reviews?.distribution ?? {}} />
         </Card>
       ) : null}
 
@@ -159,7 +149,7 @@ export default function ReviewSection({ pluginId, isOwner }: { pluginId: string;
             <Space>
               <Rate disabled value={mine.rating} style={{ fontSize: 14 }} />
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {new Date(mine.updatedAt).toLocaleString()}
+                {formatDateTime(mine.updatedAt)}
               </Typography.Text>
             </Space>
             {mine.body ? <p className="my-review-body">{mine.body}</p> : null}
@@ -174,12 +164,7 @@ export default function ReviewSection({ pluginId, isOwner }: { pluginId: string;
               <Rate />
             </Form.Item>
             <Form.Item name="body" label="说点什么(支持 Markdown,可留空)">
-              <Input.TextArea
-                rows={4}
-                maxLength={5000}
-                showCount
-                placeholder="它解决了什么问题?哪里好用、哪里别扭?"
-              />
+              <Input.TextArea rows={4} maxLength={5000} showCount placeholder="它解决了什么问题?哪里好用、哪里别扭?" />
             </Form.Item>
             <Space>
               <Button type="primary" htmlType="submit" loading={saving}>
@@ -200,38 +185,29 @@ export default function ReviewSection({ pluginId, isOwner }: { pluginId: string;
           <List
             itemLayout="vertical"
             dataSource={items}
-            renderItem={(r) => (
-              <List.Item key={`${r.displayName}-${r.createdAt}`}>
+            renderItem={(review) => (
+              <List.Item key={`${review.displayName}-${review.createdAt}`}>
                 <List.Item.Meta
-                  avatar={<Avatar icon={<UserOutlined />} style={{ background: '#c7d2fe', color: '#4f46e5' }} />}
+                  avatar={<Avatar icon={<UserOutlined />} style={{ background: token.colorPrimaryBg, color: token.colorPrimary }} />}
                   title={
                     <Space>
-                      <span>{r.displayName ?? '匿名用户'}</span>
-                      <Rate disabled value={r.rating} style={{ fontSize: 12 }} />
-                      {r.pluginVersion ? <Tag bordered={false}>v{r.pluginVersion}</Tag> : null}
+                      <span>{review.displayName ?? '匿名用户'}</span>
+                      <Rate disabled value={review.rating} style={{ fontSize: 12 }} />
+                      {review.pluginVersion ? <Tag bordered={false}>v{review.pluginVersion}</Tag> : null}
                     </Space>
                   }
                   description={
                     <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      {new Date(r.updatedAt).toLocaleString()}
-                      {r.updatedAt !== r.createdAt ? '(已编辑)' : ''}
+                      {formatDateTime(review.updatedAt)}
+                      {review.updatedAt !== review.createdAt ? '(已编辑)' : ''}
                     </Typography.Text>
                   }
                 />
-                {r.bodyHtml ? (
-                  <div className="markdown-body" dangerouslySetInnerHTML={{ __html: r.bodyHtml }} />
-                ) : null}
+                {review.bodyHtml ? <div className="markdown-body" dangerouslySetInnerHTML={{ __html: review.bodyHtml }} /> : null}
               </List.Item>
             )}
           />
-          <Pagination
-            align="center"
-            current={page}
-            pageSize={SIZE}
-            total={total}
-            showSizeChanger={false}
-            onChange={setPage}
-          />
+          <Pagination align="center" current={page} pageSize={REVIEW_PAGE_SIZE} total={total} showSizeChanger={false} onChange={setPage} />
         </>
       )}
     </Space>

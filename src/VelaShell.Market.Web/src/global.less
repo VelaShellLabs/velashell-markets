@@ -1,9 +1,9 @@
 /* 全站样式。只放三类东西:页面容器、市场特有的卡片/评价/报告样式、Markdown 正文排版。
-   组件级观感一律交给 antd 的主题令牌(见 src/theme/index.ts 的 themeTokens),
+   组件级观感一律交给 antd 的主题令牌(见 src/utils/theme.ts 的 themeTokens),
    在这里覆盖组件样式会让主题切换失效。
 
    深浅色:这批自定义类不是 antd 组件,拿不到主题令牌,所以颜色一律走下面这组
-   CSS 变量,由 <html data-theme> 切换(见 src/theme/ThemeProvider.tsx)。
+   CSS 变量,由 <html data-theme> 切换(见 src/components/ThemeProvider)。
    **新增样式时不要再写死颜色** —— 写死一个,深色模式下就多一处白底白字。 */
 
 :root {
@@ -12,19 +12,21 @@
 
   /* ---- 浅色(默认) ---- */
   --market-header-bg: #ffffff;
-  --market-text: #344054;        /* 正文 */
+  --market-text: #344054; /* 正文 */
   --market-text-strong: #101828; /* 标题、卡片名 */
-  --market-text-muted: #667085;  /* 摘要、次要说明 */
-  --market-text-faint: #98a2b3;  /* 作者、计数、页脚 */
-  --market-border: #eaecf0;      /* 表格线、虚线分隔 */
+  --market-text-muted: #667085; /* 摘要、次要说明 */
+  --market-text-faint: #98a2b3; /* 作者、计数、页脚 */
+  --market-border: #eaecf0; /* 表格线、虚线分隔 */
   --market-border-soft: #f2f4f7; /* 卡片底部细线 */
   --market-card-border: #eceef3;
   --market-card-hover-border: #c7d2fe;
   --market-card-hover-shadow: rgba(79, 70, 229, 0.12);
-  --market-fill: #f2f4f7;        /* 行内代码底、分布条轨道 */
+  --market-fill: #f2f4f7; /* 行内代码底、分布条轨道 */
   --market-fill-subtle: #f9fafb; /* 表头底 */
   --market-quote-border: #d0d5dd;
   --market-link: #4f46e5;
+  --market-star: #faad14; /* 有评分时的星色,深浅色下都够亮,不随主题变 */
+  --market-star-empty: #d0d5dd; /* 没人评过时的灰星 */
 }
 
 /* ---- 深色 ----
@@ -45,11 +47,15 @@
   --market-fill-subtle: rgba(255, 255, 255, 0.04);
   --market-quote-border: #3f3f46;
   --market-link: #8b83f0;
+  --market-star-empty: rgba(255, 255, 255, 0.22);
 }
 
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* ---- 页面容器 ------------------------------------------------------------ */
@@ -84,6 +90,30 @@ body {
   padding: 28px var(--market-page-pad) 56px;
 }
 
+/* PageShell 的标题区:左边标题+说明,右边动作按钮,窄屏自动换行。 */
+.market-page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+/* 顶栏右侧的用户入口。 */
+.market-user-entry {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 整页居中的过渡态(登录回调等)。 */
+.market-center-stage {
+  padding: 120px 0;
+  text-align: center;
+}
+
 /* 渐变色块在深浅色下都成立,不随主题变 —— 它本来就是一块自带背景的彩色区域。 */
 .market-hero {
   background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #9333ea 100%);
@@ -113,6 +143,33 @@ body {
   padding: 16px 0;
 }
 
+/* 侧栏里的要点清单(发布页的"会被拒收/会转人工")。 */
+.market-tips {
+  padding-left: 18px;
+  margin: 0;
+  color: var(--market-text-muted);
+  line-height: 2;
+}
+
+/* 校验和:整串很长,必须能断行,否则会把右栏撑出横向滚动条。 */
+.market-hash {
+  font-size: 11px;
+  word-break: break-all;
+  margin-bottom: 8px;
+}
+
+.market-hash-last {
+  margin-bottom: 0;
+}
+
+.market-star {
+  color: var(--market-star);
+}
+
+.market-star-empty {
+  color: var(--market-star-empty);
+}
+
 /* ---- 插件卡片 ------------------------------------------------------------ */
 
 /* 用 grid 而不是 24 栅格:栅格按比例分宽度,列表里只有一两个插件时卡片会被压到
@@ -127,7 +184,10 @@ body {
 .plugin-card {
   height: 100%;
   border-color: var(--market-card-border);
-  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .plugin-card:hover {
@@ -285,11 +345,10 @@ body {
   overflow: hidden;
 }
 
-/* 星级色在深浅色下都够亮,不随主题变。 */
 .review-bar-fill {
   height: 100%;
   border-radius: 4px;
-  background: #faad14;
+  background: var(--market-star);
 }
 
 .review-bar-count {
@@ -325,19 +384,34 @@ body {
   line-height: 1.35;
 }
 
-.markdown-body h1 { font-size: 20px; }
-.markdown-body h2 { font-size: 17px; }
-.markdown-body h3 { font-size: 15px; }
-.markdown-body > *:first-child { margin-top: 0; }
+.markdown-body h1 {
+  font-size: 20px;
+}
 
-.markdown-body p { margin: 0 0 12px; }
+.markdown-body h2 {
+  font-size: 17px;
+}
+
+.markdown-body h3 {
+  font-size: 15px;
+}
+
+.markdown-body > *:first-child {
+  margin-top: 0;
+}
+
+.markdown-body p {
+  margin: 0 0 12px;
+}
 
 .markdown-body a {
   color: var(--market-link);
   text-decoration: none;
 }
 
-.markdown-body a:hover { text-decoration: underline; }
+.markdown-body a:hover {
+  text-decoration: underline;
+}
 
 .markdown-body code {
   background: var(--market-fill);
@@ -385,9 +459,13 @@ body {
   text-align: left;
 }
 
-.markdown-body th { background: var(--market-fill-subtle); }
+.markdown-body th {
+  background: var(--market-fill-subtle);
+}
 
-.markdown-body img { max-width: 100%; }
+.markdown-body img {
+  max-width: 100%;
+}
 
 /* ---- 检测报告 ------------------------------------------------------------ */
 
@@ -400,7 +478,15 @@ body {
   font-size: 13px;
 }
 
-.finding-row:last-child { border-bottom: none; }
+.finding-row:last-child {
+  border-bottom: none;
+}
+
+/* 定宽:三种级别的标签长度不一,不定宽的话右边的正文会参差不齐。 */
+.finding-severity {
+  min-width: 58px;
+  text-align: center;
+}
 
 .finding-code {
   font-family: 'Cascadia Code', Consolas, monospace;
@@ -412,4 +498,16 @@ body {
 .finding-path {
   color: var(--market-text-faint);
   font-size: 12px;
+}
+
+/* ---- 窄屏 ---------------------------------------------------------------- */
+
+@media (max-width: 768px) {
+  :root {
+    --market-page-pad: 16px;
+  }
+
+  .market-hero {
+    padding: 28px 20px;
+  }
 }

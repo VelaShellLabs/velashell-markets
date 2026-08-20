@@ -1,3 +1,4 @@
+import { defaultAuthority, defaultClientId } from '@/configs';
 import { UserManager, WebStorageStateStore, type User } from 'oidc-client-ts';
 
 /** 登录用户(oidc-client-ts 的 User 别名,免得各处都 import 它)。 */
@@ -15,8 +16,8 @@ export type MarketUser = User;
  * 两个常量都允许被页面注入的全局量覆盖(nginx 在启动时注入):
  * 同一份构建产物因此能部署到不同环境,不必为了换个 authority 重新打包。
  */
-const authority = (window as any).__MARKET_AUTHORITY__ ?? 'http://localhost:7020';
-const clientId = (window as any).__MARKET_CLIENT_ID__ ?? 'velashell-market-web';
+const authority = window.__MARKET_AUTHORITY__ ?? defaultAuthority;
+const clientId = window.__MARKET_CLIENT_ID__ ?? defaultClientId;
 
 export const userManager = new UserManager({
   authority,
