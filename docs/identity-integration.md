@@ -100,7 +100,7 @@ docker compose up -d
 签名与加密各一把 RSA 2048,首次启动生成后落在 `Identity:KeyDirectory`(compose 里挂了 `identity-keys` 卷)。
 
 **这个目录必须持久化。** 丢了密钥等于换了签发者:所有已签发的令牌一起失效,所有人被登出。
-备份时把它和 `mongo-data` 一起备。
+备份时把它和 `mongodb_master_data` 一起备。
 
 ## 六、上生产要改的
 

@@ -8,10 +8,14 @@
     <File Path="README.md" />
   </Folder>
   <Folder Name="/src/">
-    <Project Path="src/VelaShell.Market.Domain/VelaShell.Market.Domain.csproj" />
-    <Project Path="src/VelaShell.Market.Infrastructure/VelaShell.Market.Infrastructure.csproj" />
     <Project Path="src/VelaShell.Market.Api/VelaShell.Market.Api.csproj" />
+    <Project Path="src/VelaShell.Market.Domain/VelaShell.Market.Domain.csproj" />
     <Project Path="src/VelaShell.Market.Identity/VelaShell.Market.Identity.csproj" />
+    <Project Path="src/VelaShell.Market.Infrastructure/VelaShell.Market.Infrastructure.csproj" />
+    <Project Path="src/VelaShell.Market.Web/VelaShell.Market.Web.esproj">
+      <Build />
+      <Deploy />
+    </Project>
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/VelaShell.Market.Tests/VelaShell.Market.Tests.csproj" />

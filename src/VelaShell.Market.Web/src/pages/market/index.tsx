@@ -36,6 +36,8 @@ export default function MarketPage() {
     fn();
   };
 
+  const hasTags = tags.length > 0;
+
   return (
     <div className="market-page">
       <div className="market-hero">
@@ -51,20 +53,20 @@ export default function MarketPage() {
       </div>
 
       <Row gutter={24}>
-        <Col xs={24} md={6} xl={5}>
-          <Card
-            size="small"
-            title={
-              <Space>
-                <TagsOutlined />
-                标签
-              </Space>
-            }
-            style={{ marginBottom: 16 }}
-          >
-            {tags.length === 0 ? (
-              <Typography.Text type="secondary">暂无标签</Typography.Text>
-            ) : (
+        {/* 没有标签时整列都不渲染 —— 留一个只写着"暂无标签"的空盒子,
+            白占掉近 300px 宽度,右边的卡片反而被挤窄。 */}
+        {hasTags ? (
+          <Col xs={24} md={6} xl={5}>
+            <Card
+              size="small"
+              title={
+                <Space>
+                  <TagsOutlined />
+                  标签
+                </Space>
+              }
+              style={{ marginBottom: 16 }}
+            >
               <Space size={[6, 8]} wrap>
                 <Tag.CheckableTag checked={!tag} onChange={() => reset(() => setTag(undefined))}>
                   全部
@@ -79,11 +81,11 @@ export default function MarketPage() {
                   </Tag.CheckableTag>
                 ))}
               </Space>
-            )}
-          </Card>
-        </Col>
+            </Card>
+          </Col>
+        ) : null}
 
-        <Col xs={24} md={18} xl={19}>
+        <Col xs={24} md={hasTags ? 18 : 24} xl={hasTags ? 19 : 24}>
           <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }} wrap>
             <Typography.Text type="secondary">
               {loading ? '加载中…' : `共 ${data?.total ?? 0} 个插件`}
@@ -101,24 +103,20 @@ export default function MarketPage() {
           </Space>
 
           {loading ? (
-            <Row gutter={[16, 16]}>
+            <div className="plugin-grid">
               {Array.from({ length: 8 }).map((_, i) => (
-                <Col xs={24} sm={12} xl={8} xxl={6} key={i}>
-                  <Card>
-                    <Skeleton active paragraph={{ rows: 2 }} />
-                  </Card>
-                </Col>
+                <Card key={i}>
+                  <Skeleton active avatar={{ shape: 'square', size: 48 }} paragraph={{ rows: 2 }} />
+                </Card>
               ))}
-            </Row>
+            </div>
           ) : data && data.items.length > 0 ? (
             <>
-              <Row gutter={[16, 16]}>
+              <div className="plugin-grid">
                 {data.items.map((p) => (
-                  <Col xs={24} sm={12} xl={8} xxl={6} key={p.id}>
-                    <PluginCard plugin={p} />
-                  </Col>
+                  <PluginCard key={p.id} plugin={p} />
                 ))}
-              </Row>
+              </div>
               <Pagination
                 style={{ marginTop: 24 }}
                 align="center"

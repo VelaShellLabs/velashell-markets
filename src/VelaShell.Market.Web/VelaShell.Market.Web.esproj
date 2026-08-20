@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.VisualStudio.JavaScript.Sdk/1.0.1184077">
+  <PropertyGroup>
+    <!-- 本机调试直接跑 dev server(需要本机装了 bun;想用 npm 改成 npm run dev)。 -->
+    <StartupCommand>bun run dev</StartupCommand>
+    <BuildOutputFolder>$(MSBuildProjectDirectory)\dist</BuildOutputFolder>
+    <!--
+      真正的打包发生在容器里(build/web.Dockerfile 的 npm run build):
+      VS 构建这个项目时**不跑** package.json 的 build/install,免得解决方案构建
+      依赖本机的 node 工具链。它在解决方案里只承担"资源管理 + 本机起 dev server"。
+    -->
+    <ShouldRunBuildScript>false</ShouldRunBuildScript>
+    <ShouldRunNpmInstall>false</ShouldRunNpmInstall>
+  </PropertyGroup>
+</Project>

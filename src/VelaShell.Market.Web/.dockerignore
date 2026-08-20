@@ -2,3 +2,9 @@ node_modules
 dist
 .umi
 .umi-production
+# VS 工程文件只服务于解决方案,不参与镜像构建 —— 排除掉,免得 VS 碰一下它
+# 就让源码层缓存失效、白跑一遍前端打包。
+*.esproj
+*.esproj.user
+bun.lock
+bun.lockb

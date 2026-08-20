@@ -28,11 +28,11 @@ docker compose up -d --build
 
 | 服务 | 地址 | 说明 |
 | --- | --- | --- |
-| 前端 | http://localhost:8000 | React + Umi + antd |
+| 前端 | http://localhost:8000 | React + Umi Max + Ant Design Pro |
 | 统一认证 | http://localhost:7020 | OIDC(OpenIddict);登录、注册、改口令 |
 | API | http://localhost:8080 | Swagger 在 Development 下于 `/swagger` |
 | MinIO 控制台 | http://localhost:9001 | 默认 `minioadmin` / `minioadmin` |
-| MongoDB | localhost:27017 | 库名 `velashell-market` / `velashell-identity`,**已启用鉴权** |
+| MongoDB | localhost:27017 / 27018 / 27019 | 副本集 `rs0`(主 / 从 / 仲裁)。库名 `velashell-market` / `velashell-identity`,**已启用鉴权**;客户端连接认证库填 `admin` |
 | clamd | localhost:3310 | 首次启动要拉病毒库,约几分钟 |
 
 > ClamAV 病毒库没就绪时 clamd 不接受连接。这时上传的包会**停在隔离区等重试**,
@@ -57,10 +57,13 @@ src/
 ├── VelaShell.Market.Infrastructure/  Mongo 上下文与索引、S3 存储、ClamAV、检测流水线
 ├── VelaShell.Market.Api/             HTTP API(最小 API)、OIDC 资源服务器、Markdown 渲染
 ├── VelaShell.Market.Identity/        统一认证(OpenIddict):授权码 + PKCE、账号与注册
-└── VelaShell.Market.Web/             前端(React + Umi + antd)
-    ├── layouts/                   全站骨架:顶栏、主题令牌、Markdown 排版
-    ├── components/                评价区、检测报告
-    └── pages/                     浏览 / 详情 / 发布 / 我的上传 / 我的插件 / 审核台
+└── VelaShell.Market.Web/             前端(Umi Max + Ant Design Pro)
+    ├── config/                    路由即菜单、代理、ProLayout 默认外观、antd 主题令牌
+    ├── src/app.tsx                全局初始状态(当前用户)与 ProLayout 运行时配置
+    ├── src/access.ts              权限(signedIn / canModerate),审核台入口据此显隐
+    ├── src/services/              按域划分的接口层:market / reviews / me / uploads / moderation
+    ├── src/components/            插件图标、签名标签、检测报告
+    └── src/pages/                 浏览 / 详情 / 发布 / 我的上传 / 我的插件 / 审核台
 tests/VelaShell.Market.Tests/         静态检测器的地面真值用例
 build/                                Dockerfile 与 SDK 同步脚本
 docs/                                 架构、安全流水线、身份对接

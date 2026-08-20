@@ -90,16 +90,55 @@ docker compose up -d --build
 1. **反向代理与 TLS**:`web` 容器只监听 80,`identity` 只监听 8080(映射到 7020)。
    前面套一层 Caddy / nginx / Traefik 终止 TLS,并把 `client_max_body_size` 放到 512MB
    以上 —— 插件包最大就是这个量级。
-2. **备份**:`mongo-data`(业务数据 **与账号**)、`minio-data`(**正式桶里的包**)、
+2. **备份**:`mongodb_master_data`(主节点的业务数据 **与账号**)、`minio-data`(**正式桶里的包**)、
    `identity-keys`(**令牌签名密钥**)。隔离桶可以不备份 —— 里面的东西按定义还没被证明无害。
    密钥丢了不会丢数据,但所有人会被登出,而且这事没有补救办法,只能重新登录。
+   注意副本集里的从节点是主节点的副本,**不是备份** —— 误删的文档会同步删到从节点上去。
 3. **病毒库更新**:clamav 镜像自带 freshclam,保持容器常驻即可;别用 `--rm` 跑它,
    否则每次重启都要重拉一遍库。
 
-## 二之二、给已有的 MongoDB 补上账号密码
+## 二之二、MongoDB 副本集与账号
 
-`MONGO_INITDB_ROOT_USERNAME` / `PASSWORD` **只在数据目录为空时生效**。
-如果 `mongo-data` 卷里已经有数据(在这次改动之前跑过),照上面配好之后 mongo 仍然是免密的,
+compose 里的 mongo 是一套三节点副本集(bitnami 镜像),名为 `rs0`:
+
+| 服务 | 宿主机端口 | 角色 | 说明 |
+| --- | --- | --- | --- |
+| `mongo_primary` | 27017 | primary | 唯一持有数据卷(`mongodb_master_data`)的节点 |
+| `mongo_secondary` | 27018 | secondary | 主节点的实时副本 |
+| `mongo_arbiter` | 27019 | arbiter | 只投票、不存数据,用来在主节点挂掉时凑出多数派 |
+
+副本集不是为了扩容,而是为了**让驱动能用事务与变更流**,并在主节点故障时自动选主。
+三个节点靠 `MONGO_RS_KEY`(`.env` 里)互相认证,**三者必须一致**,换掉默认值。
+
+连接串因此是副本集形式(api 与 identity 各一份,见 compose):
+
+```
+mongodb://<user>:<pwd>@host.docker.internal:27017,host.docker.internal:27018/<库名>?authSource=admin&replicaSet=rs0
+```
+
+用 `host.docker.internal` 而不是容器名:成员在 rs 配置里公告的就是这个地址(见下面的
+`MONGODB_ADVERTISED_HOSTNAME`),驱动做拓扑发现时拿到的地址必须能解析得到,两边得对得上。
+
+**从宿主机连(Navicat / Compass)**:主机 `localhost`、端口 `27017`、用户与口令取自 `.env`、
+**认证数据库填 `admin`**。忘了填认证库是"密码没错却认证失败"的最常见原因。
+
+### 从节点加不进集群时
+
+secondary 与 arbiter 必须显式公告**宿主机映射的端口**(compose 里的
+`MONGODB_ADVERTISED_PORT_NUMBER=27018` / `27019`)。少了这一行,它们会公告容器内部的 27017 ——
+与 primary 的公告地址一模一样,于是误判"自己已经在集群里"而永远卡在等待同步,
+`rs.status()` 里只看得到 primary 一个成员。
+
+```powershell
+# 看集群到底有几个成员、各是什么角色
+docker compose exec mongo_primary mongosh --quiet -u market -p 你的口令 `
+  --authenticationDatabase admin --eval "rs.status().members.map(m => m.name + ' ' + m.stateStr)"
+```
+
+### 给已有的 MongoDB 补上账号密码
+
+`MONGODB_ROOT_USER` / `MONGODB_ROOT_PASSWORD` **只在数据目录为空时生效**。
+如果数据卷里已经有数据(在这次改动之前跑过),照上面配好之后 mongo 仍然是免密的,
 而带凭据的连接串反而会连不上。两条路:
 
 **A. 数据可以丢**(本机看效果的环境):
@@ -112,11 +151,11 @@ docker compose up -d --build
 **B. 数据要留**:先在免密状态下手工建 root 账号,再启用鉴权。
 
 ```powershell
-# 1) 用当前(免密)配置起 mongo
-docker compose up -d mongo
+# 1) 用当前(免密)配置起主节点
+docker compose up -d mongo_primary
 
 # 2) 建账号
-docker compose exec mongo mongosh --quiet --eval @'
+docker compose exec mongo_primary mongosh --quiet --eval @'
 db.getSiblingDB("admin").createUser({
   user: "market",
   pwd: "换成你的口令",
@@ -127,6 +166,10 @@ db.getSiblingDB("admin").createUser({
 # 3) 把 .env 里的 MONGO_ROOT_USER / MONGO_ROOT_PASSWORD 填成同样的值,再整体重启
 docker compose up -d --force-recreate
 ```
+
+> 从官方 `mongo:8` 镜像升级上来的部署要注意:bitnami 镜像的数据目录布局
+> (`/bitnami/mongodb`)与官方的 `/data/db` 不兼容,旧的 `mongo-data` 卷带不过来。
+> 数据要留就先 `mongodump` 导出,起好新集群后再 `mongorestore` 导回。
 
 口令里带 `: @ / ? #` 这类字符时,连接串里要写成百分号转义(`@` → `%40`),
 否则连接串会被解析成别的东西 —— 表现为一个看不懂的"认证失败"。

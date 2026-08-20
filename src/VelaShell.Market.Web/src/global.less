@@ -2,6 +2,11 @@
    组件级观感一律交给 antd 的主题令牌(见 config/config.ts 的 antd.configProvider),
    在这里覆盖组件样式会让主题切换失效。 */
 
+:root {
+  /* 顶栏与页面内容共用一个宽度上限,两者才对得齐。 */
+  --market-page-max: 1440px;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
@@ -9,8 +14,24 @@ body {
 
 /* ---- 页面容器 ------------------------------------------------------------ */
 
+/* ProLayout 会把内容区收进一个定宽(1200px)容器里,于是宽屏上整页挤成中间一条,
+   .market-page 的 max-width 根本没机会生效。这里放开它,宽度改由页面自己控制。 */
+.ant-pro-layout .ant-pro-layout-content {
+  max-width: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* 顶栏内容跟着页面走,否则导航贴在 1200px 的边上、内容却更宽,看起来是错位的。 */
+.ant-pro-top-nav-header-main {
+  max-width: var(--market-page-max);
+  width: 100%;
+  margin: 0 auto;
+  padding-inline: 24px;
+}
+
 .market-page {
-  max-width: 1400px;
+  max-width: var(--market-page-max);
   margin: 0 auto;
   padding: 28px 24px 56px;
 }
@@ -44,6 +65,15 @@ body {
 }
 
 /* ---- 插件卡片 ------------------------------------------------------------ */
+
+/* 用 grid 而不是 24 栅格:栅格按比例分宽度,列表里只有一两个插件时卡片会被压到
+   一两百像素、标题直接挤没。auto-fill + minmax 给了卡片一个下限,
+   宽屏自动多排几列,窄屏自动掉到一列,不需要为每个断点写一遍 span。 */
+.plugin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(288px, 1fr));
+  gap: 16px;
+}
 
 .plugin-card {
   height: 100%;
@@ -81,47 +111,65 @@ body {
   flex: 1;
 }
 
-.plugin-card-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
+/* 名字独占一行。之前它和版本标签挤在同一个 flex 行里,窄卡片下标签不收缩、
+   名字被压成 0 宽度 —— 卡片上看不见插件叫什么,只剩一个版本号。 */
 .plugin-card-name {
+  display: block;
   font-weight: 600;
-  font-size: 15px;
+  font-size: 16px;
+  line-height: 1.4;
   color: #101828;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.plugin-card-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-top: 3px;
+}
+
+.plugin-card-sub .ant-tag {
+  flex-shrink: 0;
+  margin-inline-end: 0;
+}
+
 .plugin-card-author {
+  flex: 1;
+  min-width: 0;
   color: #98a2b3;
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  margin-top: 2px;
 }
 
 .plugin-card-summary {
   color: #667085;
   font-size: 13px;
-  line-height: 1.55;
-  margin: 12px 0 10px;
+  line-height: 1.6;
+  margin: 14px 0 12px;
   /* 固定两行:卡片高度不齐会让整个网格看起来很脏。 */
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  min-height: 40px;
+  min-height: 42px;
 }
 
 .plugin-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   min-height: 24px;
   margin-bottom: 12px;
+}
+
+.plugin-card-tags .ant-tag {
+  margin-inline-end: 0;
 }
 
 /* 底部元信息与正文用一条细线隔开,评分/下载量对齐到同一行的两端。 */
