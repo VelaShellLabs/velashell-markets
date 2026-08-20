@@ -1,7 +1,26 @@
 {
-  "extends": "./src/.umi/tsconfig.json",
   "compilerOptions": {
+    "target": "esnext",
+    "module": "esnext", // 显式指定（TS 7 默认 esnext，但推荐写明）
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
     "strict": true,
-    "noEmit": true
-  }
+    "forceConsistentCasingInFileNames": true,
+    "noImplicitReturns": true,
+    "declaration": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+
+    // 新增 / 重要调整
+    "types": ["bun", "react", "react-dom"], // 根据项目需要添加（@types 不再自动引入）
+
+    "paths": {
+      "@/*": ["./src/*"],
+      "@@/*": ["./src/.umi/*"],
+      "@@test/*": ["./src/.umi-test/*"]
+    }
+  },
+  "include": ["./**/*.d.ts", "./**/*.ts", "./**/*.tsx"]
 }
