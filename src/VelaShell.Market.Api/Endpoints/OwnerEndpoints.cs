@@ -51,7 +51,11 @@ public static class OwnerEndpoints
         UpdateDefinition<Plugin> update = Builders<Plugin>.Update.Set(p => p.UpdatedAt, DateTime.UtcNow);
         if (request.DescriptionMarkdown is not null)
         {
-            update = update.Set(p => p.DescriptionMarkdown, request.DescriptionMarkdown);
+            update = update.Set(p => p.DescriptionMarkdown, request.DescriptionMarkdown)
+                           // 作者重写了描述,审核员那条"描述因违规已被移除"的说明就该消失 ——
+                           // 留着它等于永远给这个插件挂着一块牌子,即便问题早已改掉。
+                           .Set(p => p.DescriptionRemovedReason, null)
+                           .Set(p => p.DescriptionRemovedAt, null);
         }
         if (request.Tags is not null)
         {

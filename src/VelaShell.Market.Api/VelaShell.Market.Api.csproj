@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="EasilyNET.Mongo.AspNetCore" />
+    <PackageReference Include="EasilyNET.Mongo" />
     <PackageReference Include="EasilyNET.WebCore" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" />

@@ -66,7 +66,7 @@ public class VpxStaticInspectorTests
     public void CleanPackage_HasNoBlockingOrWarningFindings()
     {
         VpxInspection result = Inspect(BuildPackage());
-        Assert.IsFalse(result.Findings.Any(f => f.Severity != ScanSeverity.Info),
+        Assert.DoesNotContain(f => f.Severity != ScanSeverity.Info, result.Findings,
             "干净的包不该产生任何告警:" + string.Join("; ", result.Findings.Select(f => f.Code)));
         Assert.IsNotNull(result.Manifest);
         Assert.AreEqual("acme.demo", result.Manifest.Id);
@@ -83,7 +83,7 @@ public class VpxStaticInspectorTests
         ZipFile.CreateFromDirectory(stage, fake);
 
         VpxInspection result = Inspect(fake, "a.b");
-        Assert.IsTrue(result.Findings.Any(f => f is { Code: "VPX_FORMAT", Severity: ScanSeverity.Blocking }));
+        Assert.Contains(f => f is { Code: "VPX_FORMAT", Severity: ScanSeverity.Blocking }, result.Findings);
     }
 
     [TestMethod]
@@ -95,7 +95,7 @@ public class VpxStaticInspectorTests
         File.WriteAllBytes(package, bytes);
 
         VpxInspection result = Inspect(package);
-        Assert.IsTrue(result.Findings.Any(f => f is { Code: "VPX_FORMAT", Severity: ScanSeverity.Blocking }));
+        Assert.Contains(f => f is { Code: "VPX_FORMAT", Severity: ScanSeverity.Blocking }, result.Findings);
     }
 
     [TestMethod]
@@ -104,7 +104,7 @@ public class VpxStaticInspectorTests
         // 插件是托管程序集,包里带 .exe 没有正当理由,是最直接的投递面。
         string package = BuildPackage(extraFiles: new() { ["tool.exe"] = "MZ fake"u8.ToArray() });
         VpxInspection result = Inspect(package);
-        Assert.IsTrue(result.Findings.Any(f => f is { Code: "CONTENT_BLOCKED_TYPE", Severity: ScanSeverity.Blocking }));
+        Assert.Contains(f => f is { Code: "CONTENT_BLOCKED_TYPE", Severity: ScanSeverity.Blocking }, result.Findings);
     }
 
     [TestMethod]
@@ -113,8 +113,8 @@ public class VpxStaticInspectorTests
         // 脚本有正当用途,所以只转人工 —— 动辄拦截会让审核告警很快没人看。
         string package = BuildPackage(extraFiles: new() { ["setup.ps1"] = "Write-Host hi"u8.ToArray() });
         VpxInspection result = Inspect(package);
-        Assert.IsTrue(result.Findings.Any(f => f is { Code: "CONTENT_SCRIPT", Severity: ScanSeverity.Warning }));
-        Assert.IsFalse(result.Findings.Any(f => f.Severity == ScanSeverity.Blocking));
+        Assert.Contains(f => f is { Code: "CONTENT_SCRIPT", Severity: ScanSeverity.Warning }, result.Findings);
+        Assert.DoesNotContain(f => f.Severity == ScanSeverity.Blocking, result.Findings);
     }
 
     [TestMethod]
@@ -122,7 +122,7 @@ public class VpxStaticInspectorTests
     {
         // 声明传的是 A 包里写的是 B:这正是"用别人的 id 顶替上架"的形状。
         VpxInspection result = Inspect(BuildPackage("acme.demo"), "victim.plugin");
-        Assert.IsTrue(result.Findings.Any(f => f is { Code: "MANIFEST_ID_MISMATCH", Severity: ScanSeverity.Blocking }));
+        Assert.Contains(f => f is { Code: "MANIFEST_ID_MISMATCH", Severity: ScanSeverity.Blocking }, result.Findings);
     }
 
     [TestMethod]
@@ -133,7 +133,7 @@ public class VpxStaticInspectorTests
               "apiLevel": {{VpxStaticInspector.MaxApiLevel + 1}} }
             """;
         VpxInspection result = Inspect(BuildPackage(manifestOverride: manifest));
-        Assert.IsTrue(result.Findings.Any(f => f is { Code: "MANIFEST_API_LEVEL", Severity: ScanSeverity.Blocking }));
+        Assert.Contains(f => f is { Code: "MANIFEST_API_LEVEL", Severity: ScanSeverity.Blocking }, result.Findings);
     }
 
     [TestMethod]
@@ -148,7 +148,7 @@ public class VpxStaticInspectorTests
         VpxContainer.Pack(stage, package);
 
         VpxInspection result = Inspect(package);
-        Assert.IsTrue(result.Findings.Any(f => f is { Code: "ENTRY_MISSING", Severity: ScanSeverity.Blocking }));
+        Assert.Contains(f => f is { Code: "ENTRY_MISSING", Severity: ScanSeverity.Blocking }, result.Findings);
     }
 
     [TestMethod]
@@ -157,7 +157,7 @@ public class VpxStaticInspectorTests
         // 共享程序集不会被加载(装载器强制用宿主那份),带了要么是配置错,要么是想顶替宿主实现。
         string package = BuildPackage(extraFiles: new() { ["VelaShell.PluginSdk.dll"] = [1, 2, 3] });
         VpxInspection result = Inspect(package);
-        Assert.IsTrue(result.Findings.Any(f => f is { Code: "SHARED_ASSEMBLY_BUNDLED", Severity: ScanSeverity.Warning }));
+        Assert.Contains(f => f is { Code: "SHARED_ASSEMBLY_BUNDLED", Severity: ScanSeverity.Warning }, result.Findings);
     }
 
     [TestMethod]
@@ -166,7 +166,7 @@ public class VpxStaticInspectorTests
         // 高度可压缩的巨大文件:解压后撑爆磁盘的经典手法。
         string package = BuildPackage(extraFiles: new() { ["payload.bin"] = new byte[8 * 1024 * 1024] });
         VpxInspection result = Inspect(package);
-        Assert.IsTrue(result.Findings.Any(f => f is { Code: "ZIP_BOMB", Severity: ScanSeverity.Blocking }));
+        Assert.Contains(f => f is { Code: "ZIP_BOMB", Severity: ScanSeverity.Blocking }, result.Findings);
     }
 
     [TestMethod]
@@ -174,13 +174,13 @@ public class VpxStaticInspectorTests
     {
         List<string> versions = ["1.0.0", "1.0.0-beta.1", "1.2.0", "0.9.9", "1.10.0"];
         versions.Sort(SemVerComparer.Instance);
-        CollectionAssert.AreEqual(new[] { "0.9.9", "1.0.0-beta.1", "1.0.0", "1.2.0", "1.10.0" }, versions);
+        Assert.AreSequenceEqual(["0.9.9", "1.0.0-beta.1", "1.0.0", "1.2.0", "1.10.0"], versions);
     }
 
     [TestMethod]
     public void ComputeFileSha256_IsStable()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("velashell"));
-        Assert.AreEqual(VpxStaticInspector.ComputeFileSha256(stream).Length, 64);
+        Assert.AreEqual(64, VpxStaticInspector.ComputeFileSha256(stream).Length);
     }
 }

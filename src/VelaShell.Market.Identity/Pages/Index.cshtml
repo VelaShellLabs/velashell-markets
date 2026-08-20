@@ -37,7 +37,10 @@ else
     }
     @if (Model.PasswordChanged)
     {
-        <p class="notice ok">口令已更新。其它设备上的登录会在下次续期时失效。</p>
+        <p class="notice ok">
+            口令已更新。其它设备会在下一次操作时被登出,它们手上的刷新令牌也已失效;
+            但<strong>已经签发的访问令牌切不掉</strong>,最长还能再用 @Model.AccessTokenLifetime.TotalMinutes 分钟。
+        </p>
     }
 
     <form method="post">

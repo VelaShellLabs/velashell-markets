@@ -1,142 +1,72 @@
-import { Findings } from '@/components';
-import { approveVersion, getQueue, rejectVersion } from '@/services/moderation';
-import { ReloadOutlined } from '@ant-design/icons';
-import { App, Button, Card, Descriptions, Empty, Input, Result, Skeleton, Space, Tag, Typography } from 'antd';
+import { getQueue } from '@/services/moderation';
+import { Card, Result, Skeleton, Space, Tabs, Typography } from 'antd';
 import { useEffect, useState } from 'react';
+import PluginsPanel from './components/PluginsPanel';
+import QueuePanel from './components/QueuePanel';
+import ReviewsPanel from './components/ReviewsPanel';
 
 /**
- * 审核台。这里处理的是**检测判为"需人工复核"的包** —— 它们既没被拒,也绝不可下载,
- * 一直留在隔离区等一个人来看。
+ * 审核台。三件事分三个页签:
+ *
+ * - **隔离队列**:检测判为"需人工复核"的包,放行或驳回。
+ * - **插件治理**:下架 / 恢复 / 强制下架 / 清空违规描述。
+ * - **评价治理**:隐藏或彻底删除违规评价。
+ *
+ * 权限探测放在这里而不是各面板里:路由的 access 已经挡掉了菜单入口,但直接敲 URL 仍然进得来,
+ * 那时该看到的是一张"没有权限",而不是三个各自报错的空表格。
  */
 export default function ModerationPage() {
-  const { message, modal } = App.useApp();
-  const [items, setItems] = useState<MarketAPI.PendingVersion[] | null>(null);
-  const [denied, setDenied] = useState(false);
-  const [busy, setBusy] = useState<string | null>(null);
-
-  const load = async () => {
-    try {
-      setItems(await getQueue());
-    } catch (e: any) {
-      if (e?.response?.status === 401 || e?.response?.status === 403) {
-        setDenied(true);
-      } else {
-        setItems([]);
-      }
-    }
-  };
+  const [denied, setDenied] = useState<boolean | null>(null);
 
   useEffect(() => {
-    load();
+    // 拿队列当探针:它是最轻的一个审核端点,403 就说明这个 sub 不在审核员名单里。
+    getQueue()
+      .then(() => setDenied(false))
+      .catch((e: any) =>
+        setDenied(e?.response?.status === 401 || e?.response?.status === 403),
+      );
   }, []);
 
-  const approve = async (item: MarketAPI.PendingVersion) => {
-    setBusy(item.id);
-    try {
-      await approveVersion(item.id);
-      message.success(`${item.pluginId} ${item.version} 已放行`);
-      await load();
-    } catch {
-      // 失败信息已由统一错误处理展示。
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const reject = (item: MarketAPI.PendingVersion) => {
-    let reason = '';
-    modal.confirm({
-      title: `驳回 ${item.pluginId} ${item.version}`,
-      // 原因是必填的:不给原因的驳回等于让作者盲目重传。
-      content: (
-        <Input.TextArea
-          rows={3}
-          placeholder="驳回原因(会展示给上传者)"
-          onChange={(e) => (reason = e.target.value)}
-        />
-      ),
-      okText: '驳回',
-      okButtonProps: { danger: true },
-      cancelText: '取消',
-      onOk: async () => {
-        if (!reason.trim()) {
-          message.warning('请填写驳回原因');
-          throw new Error('reason required');
-        }
-        await rejectVersion(item.id, reason);
-        message.success('已驳回');
-        await load();
-      },
-    });
-  };
+  if (denied === null) {
+    return (
+      <div className="market-page">
+        <Card>
+          <Skeleton active paragraph={{ rows: 4 }} />
+        </Card>
+      </div>
+    );
+  }
 
   if (denied) {
-    return <Result status="403" title="没有审核权限" subTitle="审核员名单由部署方在 Auth:ModeratorSubjects 中配置。" />;
+    return (
+      <Result
+        status="403"
+        title="没有审核权限"
+        subTitle="审核员名单由部署方在 Auth:ModeratorSubjects 中配置(compose 的 MODERATOR_SUBJECT)。"
+      />
+    );
   }
 
   return (
     <div className="market-page">
-      <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 20 }}>
-        <Space direction="vertical" size={0}>
-          <Typography.Title level={3} style={{ margin: 0 }}>
-            审核台
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            这些包命中了需要人看一眼的项,在放行之前它们一直留在隔离区、不可下载。
-          </Typography.Text>
-        </Space>
-        <Button icon={<ReloadOutlined />} onClick={load}>
-          刷新
-        </Button>
+      <Space direction="vertical" size={0} style={{ marginBottom: 12 }}>
+        <Typography.Title level={3} style={{ margin: 0 }}>
+          审核台
+        </Typography.Title>
+        <Typography.Text type="secondary">
+          所有处置都要填原因,并记入服务端日志。不可逆的操作会单独提示。
+        </Typography.Text>
       </Space>
-
-      {items === null ? (
-        <Card>
-          <Skeleton active paragraph={{ rows: 4 }} />
-        </Card>
-      ) : items.length === 0 ? (
-        <Card>
-          <Empty description="队列是空的" style={{ padding: '32px 0' }} />
-        </Card>
-      ) : (
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
-          {items.map((item) => (
-            <Card
-              key={item.id}
-              title={
-                <Space wrap>
-                  <Typography.Text strong>{item.pluginId}</Typography.Text>
-                  <Tag color="blue" bordered={false}>
-                    v{item.version}
-                  </Tag>
-                  <Tag bordered={false}>{item.signature}</Tag>
-                </Space>
-              }
-              extra={
-                <Space>
-                  <Button danger onClick={() => reject(item)}>
-                    驳回
-                  </Button>
-                  <Button type="primary" loading={busy === item.id} onClick={() => approve(item)}>
-                    放行并发布
-                  </Button>
-                </Space>
-              }
-            >
-              <Descriptions size="small" column={{ xs: 1, sm: 2, md: 3 }} colon={false} style={{ marginBottom: 12 }}>
-                <Descriptions.Item label="上传者">
-                  <Typography.Text code style={{ fontSize: 12 }}>
-                    {item.uploadedBySubject}
-                  </Typography.Text>
-                </Descriptions.Item>
-                <Descriptions.Item label="上传时间">{new Date(item.uploadedAt).toLocaleString()}</Descriptions.Item>
-                <Descriptions.Item label="大小">{(item.packageSize / 1024 / 1024).toFixed(2)} MB</Descriptions.Item>
-              </Descriptions>
-              <Findings findings={item.findings} />
-            </Card>
-          ))}
-        </Space>
-      )}
+      <Tabs
+        // destroyInactiveTabPane:切走的面板卸载掉,回来时重新拉一次 ——
+        // 审核是多人同时在做的,拿着五分钟前的列表点按钮只会撞 409。
+        destroyOnHidden
+        items={[
+          { key: 'queue', label: '隔离队列', children: <QueuePanel /> },
+          { key: 'plugins', label: '插件治理', children: <PluginsPanel /> },
+          { key: 'reviews', label: '评价治理', children: <ReviewsPanel /> },
+        ]}
+      />
     </div>
   );
 }

@@ -58,7 +58,7 @@ public class MarkdownRendererTests
         string excerpt = MarkdownRenderer.Excerpt("# 标题\n\n这是一段**说明**文字。", 10);
         Assert.DoesNotContain("#", excerpt);
         Assert.DoesNotContain("**", excerpt);
-        Assert.IsTrue(excerpt.Length <= 11, excerpt); // 10 + 省略号
+        Assert.IsLessThanOrEqualTo(11, excerpt.Length, excerpt); // 10 + 省略号
     }
 
     [TestMethod]
@@ -69,14 +69,14 @@ public class MarkdownRendererTests
     {
         // 上传与编辑两处必须用同一套规则,否则同一个插件的标签会因为改了哪一边而不同。
         List<string> tags = TagList.Normalize("SSH, ssh;运维  数据库，Redis");
-        CollectionAssert.AreEqual(new[] { "ssh", "运维", "数据库", "redis" }, tags);
+        Assert.AreSequenceEqual(["ssh", "运维", "数据库", "redis"], tags);
     }
 
     [TestMethod]
     public void TagList_CapsAtTen()
     {
         List<string> tags = TagList.Normalize(string.Join(',', Enumerable.Range(0, 30).Select(i => $"tag{i}")));
-        Assert.AreEqual(10, tags.Count);
+        Assert.HasCount(10, tags);
     }
 
     [TestMethod]

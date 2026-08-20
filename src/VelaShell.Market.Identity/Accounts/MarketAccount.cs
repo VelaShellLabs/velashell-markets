@@ -3,6 +3,19 @@ using MongoDB.Bson.Serialization.Attributes;
 
 namespace VelaShell.Market.Identity.Accounts;
 
+/// <summary>本服务自用的声明名(标准 OIDC 声明一律用 <c>OpenIddictConstants.Claims</c>)。</summary>
+public static class MarketClaims
+{
+    /// <summary>
+    /// 安全戳在会话 cookie 与刷新令牌里的声明名。
+    ///
+    /// 刻意**不给它任何 Destination**:它既不该出现在访问令牌里(市场 API 用不着,
+    /// 而访问令牌是能被解开看的),也不该进 id_token。没有 destination 的声明仍然会被
+    /// OpenIddict 存进授权码与刷新令牌 —— 那正是续期时要比对的地方。
+    /// </summary>
+    public const string SecurityStamp = "velashell:stamp";
+}
+
 /// <summary>
 /// 一个可登录的账号。
 ///

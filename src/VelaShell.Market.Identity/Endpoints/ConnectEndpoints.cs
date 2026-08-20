@@ -109,6 +109,16 @@ public static class ConnectEndpoints
                 [OpenIddictServerAspNetCoreDefaults.AuthenticationScheme]);
         }
 
+        // 安全戳:改口令会换掉库里的戳,于是那之前发出去的刷新令牌到这里就对不上了。
+        // 少了这一步,"改口令"对已经被顺走的刷新令牌毫无作用 —— 对方能一直续到令牌自然过期。
+        // 戳为空的是升级本版本之前签发的令牌,一律当作无效(升级后所有人重登一次)。
+        string? stamp = granted.GetClaim(MarketClaims.SecurityStamp);
+        if (stamp is null || !string.Equals(stamp, account.SecurityStamp, StringComparison.Ordinal))
+        {
+            return Results.Forbid(Problem(Errors.InvalidGrant, "登录状态已失效(口令已变更),请重新登录。"),
+                [OpenIddictServerAspNetCoreDefaults.AuthenticationScheme]);
+        }
+
         ClaimsIdentity identity = CreateIdentity(account);
         identity.SetScopes(granted.GetScopes());
         identity.SetResources(granted.GetResources());
@@ -157,7 +167,10 @@ public static class ConnectEndpoints
         ClaimsIdentity identity = new(TokenValidationParameters.DefaultAuthenticationType, Claims.Name, Claims.Role);
         identity.SetClaim(Claims.Subject, account.Id)
                 .SetClaim(Claims.Name, account.DisplayName ?? account.UserName)
-                .SetClaim(Claims.PreferredUsername, account.UserName);
+                .SetClaim(Claims.PreferredUsername, account.UserName)
+                // 安全戳跟着授权码与刷新令牌走(不进访问令牌,见 GetDestinations),
+                // 续期时用它判断"这张刷新令牌是不是改口令之前发的"。
+                .SetClaim(MarketClaims.SecurityStamp, account.SecurityStamp);
         if (account.Email is not null)
         {
             identity.SetClaim(Claims.Email, account.Email);
@@ -187,6 +200,11 @@ public static class ConnectEndpoints
                 {
                     yield return Destinations.IdentityToken;
                 }
+                yield break;
+
+            // 一个 destination 都不给:安全戳是服务端自用的,不该出现在能被解开看的访问令牌里。
+            // 没有 destination 的声明照样会被 OpenIddict 存进授权码与刷新令牌,续期时取得到。
+            case MarketClaims.SecurityStamp:
                 yield break;
 
             default:

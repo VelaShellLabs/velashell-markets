@@ -19,10 +19,7 @@ FROM mcr.microsoft.com/dotnet/nightly/sdk:11.0-preview AS build
 WORKDIR /src
 
 # 先只拷构建描述文件再 restore:源码改动不会让依赖还原的缓存层失效。
-COPY Directory.Build.props Directory.Packages.props global.json nuget.config ./
-# nuget.config 里有一条指向 ./packages 的本地源(给 VelaShell SDK 用的)。
-# 认证服务不需要那个包,但源路径不存在会让 restore 直接报错,所以建个空目录。
-RUN mkdir -p packages
+COPY Directory.Build.props Directory.Packages.props global.json ./
 COPY src/VelaShell.Market.Identity/*.csproj ./src/VelaShell.Market.Identity/
 RUN dotnet restore src/VelaShell.Market.Identity/VelaShell.Market.Identity.csproj
 

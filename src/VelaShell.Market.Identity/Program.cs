@@ -1,5 +1,6 @@
 using System.Text.Encodings.Web;
 using System.Text.Unicode;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -74,6 +75,29 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
            options.Cookie.SameSite = SameSiteMode.Lax;
            // 生产是 HTTPS,cookie 就该只走 HTTPS;本机跑 http://localhost 时 Always 会让 cookie 根本发不出去。
            options.Cookie.SecurePolicy = server.RequireHttps ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
+
+           // 每次请求都拿 cookie 里的安全戳跟库里的对一遍。对不上就当场登出 ——
+           // 改口令、停用账号才能**立刻**把别的设备踢下线,而不是等 14 天 cookie 自然过期。
+           //
+           // 这里不像 ASP.NET Core Identity 那样加 ValidationInterval 节流:这个 cookie 只在
+           // 认证服务自己的几个页面(登录页、首页、授权端点)上用得到,请求量本来就很小,
+           // 而节流的代价是"改了口令但对方还能再用 30 分钟",不值当。
+           options.Events.OnValidatePrincipal = async context =>
+           {
+               string? subject = context.Principal?.FindFirst(Claims.Subject)?.Value;
+               string? stamp = context.Principal?.FindFirst(MarketClaims.SecurityStamp)?.Value;
+               AccountStore accounts = context.HttpContext.RequestServices.GetRequiredService<AccountStore>();
+               MarketAccount? account = subject is null ? null : await accounts.FindByIdAsync(subject, context.HttpContext.RequestAborted);
+
+               // stamp 为空的是**升级本版本之前**签发的老 cookie。一律当作无效:
+               // 放行它们等于给"改口令踢不掉旧会话"留一个无限期的后门。代价是升级后所有人重登一次。
+               if (account is null || account.IsDisabled || stamp is null
+                   || !string.Equals(stamp, account.SecurityStamp, StringComparison.Ordinal))
+               {
+                   context.RejectPrincipal();
+                   await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+               }
+           };
        });
 builder.Services.AddAuthorization();
 

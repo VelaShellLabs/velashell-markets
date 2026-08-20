@@ -1,8 +1,11 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Options;
 using VelaShell.Market.Identity.Accounts;
 using VelaShell.Market.Identity.Options;
+using VelaShell.Market.Identity.Pages.Account;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace VelaShell.Market.Identity.Pages;
@@ -11,10 +14,17 @@ namespace VelaShell.Market.Identity.Pages;
 /// 认证服务的门面页:没登录时给两个入口,登录后给"我是谁"和改口令。
 /// 这里刻意把 <c>sub</c> 显示出来 —— 市场的审核员名单要用它,不然只能去数据库里翻。
 /// </summary>
-public sealed class IndexModel(AccountStore accounts, IOptions<AccountOptions> options) : PageModel
+public sealed class IndexModel(AccountStore accounts, IOptions<AccountOptions> options,
+                               IOptions<IdentityServerOptions> server) : PageModel
 {
     /// <summary>当前登录的账号,未登录为 <c>null</c>。</summary>
     public MarketAccount? Account { get; private set; }
+
+    /// <summary>
+    /// 访问令牌寿命。改口令的提示语里要用它 —— 换戳能立刻切断会话与刷新令牌,
+    /// 但**已经签出去的访问令牌切不掉**,只能等它自己过期。写死一个数字迟早会与配置对不上。
+    /// </summary>
+    public TimeSpan AccessTokenLifetime => server.Value.AccessTokenLifetime;
 
     /// <summary>改口令的失败原因。</summary>
     public string? Error { get; private set; }
@@ -57,6 +67,11 @@ public sealed class IndexModel(AccountStore accounts, IOptions<AccountOptions> o
         }
 
         await accounts.ChangePasswordAsync(Account, NewPassword, cancel);
+        // 换戳会让所有带旧戳的 cookie 立刻失效 —— 包括当前这一张。用新戳重签一次,
+        // 否则"改完口令,下一次点击就被弹回登录页"的是本人,而不是那个该被踢掉的人。
+        await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
+            SessionPrincipal.Create(Account),
+            new AuthenticationProperties { IsPersistent = true, IssuedUtc = DateTimeOffset.UtcNow });
         PasswordChanged = true;
         return Page();
     }

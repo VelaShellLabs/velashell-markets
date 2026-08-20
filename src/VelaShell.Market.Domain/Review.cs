@@ -39,4 +39,16 @@ public sealed class Review
 
     /// <summary>是否被管理员隐藏(违规内容),隐藏后不计入均值。</summary>
     public bool IsHidden { get; set; }
+
+    /// <summary>
+    /// 隐藏原因。**只在审核台可见**,不下发给公开列表 ——
+    /// 把"这条为什么被隐藏"讲给所有人听,等于把违规内容换个地方再展示一遍。
+    /// </summary>
+    public string? HiddenReason { get; set; }
+
+    /// <summary>隐藏时间(UTC)。</summary>
+    public DateTime? HiddenAt { get; set; }
+
+    /// <summary>执行隐藏的审核员身份主体。留痕:事后要能回答"谁在什么时候按了这一下"。</summary>
+    public string? HiddenBySubject { get; set; }
 }

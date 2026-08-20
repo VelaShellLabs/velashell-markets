@@ -95,13 +95,16 @@ public sealed class LoginModel(AccountStore accounts, IOptions<AccountOptions> o
 /// <summary>把账号翻译成本站会话用的身份主体。声明名与令牌里保持一致,省得两边各记一套。</summary>
 public static class SessionPrincipal
 {
-    /// <summary>建一个只带 sub / name / preferred_username 的会话主体。</summary>
+    /// <summary>建一个带 sub / name / preferred_username 与安全戳的会话主体。</summary>
     public static ClaimsPrincipal Create(MarketAccount account)
     {
         ClaimsIdentity identity = new(CookieAuthenticationDefaults.AuthenticationScheme, Claims.Name, Claims.Role);
         identity.AddClaim(new(Claims.Subject, account.Id));
         identity.AddClaim(new(Claims.Name, account.DisplayName ?? account.UserName));
         identity.AddClaim(new(Claims.PreferredUsername, account.UserName));
+        // 安全戳随 cookie 一起走。改口令换掉库里的戳之后,别处那些还带着旧戳的 cookie
+        // 会在下一次请求时被 OnValidatePrincipal 拒掉 —— 这是"改口令能踢人下线"的实现。
+        identity.AddClaim(new(MarketClaims.SecurityStamp, account.SecurityStamp));
         return new(identity);
     }
 }

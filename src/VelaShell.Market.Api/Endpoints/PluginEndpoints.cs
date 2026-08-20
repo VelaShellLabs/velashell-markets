@@ -104,6 +104,9 @@ public static class PluginEndpoints
             plugin.Summary,
             descriptionHtml = markdown.ToHtml(plugin.DescriptionMarkdown),
             plugin.DescriptionMarkdown,
+            // 描述被审核员清空时,插件页要说清楚"这里为什么是空的" ——
+            // 不然读者只会以为作者懒得写,而作者也不知道自己该改什么。
+            plugin.DescriptionRemovedReason,
             plugin.Author,
             plugin.Publisher,
             plugin.Tags,

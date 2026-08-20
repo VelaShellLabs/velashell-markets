@@ -96,7 +96,16 @@ export default function PluginDetailPage() {
                 {
                   key: 'readme',
                   label: '说明',
-                  children: data.descriptionHtml ? (
+                  // 描述被审核员清空时,必须说清"这里为什么是空的" ——
+                  // 否则读者只会以为作者懒得写,而作者也不知道自己该改什么。
+                  children: data.descriptionRemovedReason ? (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      message="该说明因违规已被移除"
+                      description={data.descriptionRemovedReason}
+                    />
+                  ) : data.descriptionHtml ? (
                     <div className="markdown-body" dangerouslySetInnerHTML={{ __html: data.descriptionHtml }} />
                   ) : (
                     <Typography.Text type="secondary">作者还没有填写说明。</Typography.Text>

@@ -70,6 +70,21 @@ public sealed class Plugin
     /// <summary>下架原因(展示给拥有者)。</summary>
     public string? UnlistedReason { get; set; }
 
+    /// <summary>下架时间(UTC)。</summary>
+    public DateTime? UnlistedAt { get; set; }
+
+    /// <summary>
+    /// 描述被审核员移除的原因;为 null 表示描述从未被处理过。
+    ///
+    /// 移除描述与下架插件是两件事:描述违规不该连累插件本身,所以这里只清空
+    /// <see cref="DescriptionMarkdown" /> 并留下这条说明,插件继续可用、作者可以重写。
+    /// 作者一旦重写描述,这条说明随之清空(见 OwnerEndpoints.EditAsync)。
+    /// </summary>
+    public string? DescriptionRemovedReason { get; set; }
+
+    /// <summary>描述被移除的时间(UTC)。</summary>
+    public DateTime? DescriptionRemovedAt { get; set; }
+
     /// <summary>创建时间(UTC)。</summary>
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

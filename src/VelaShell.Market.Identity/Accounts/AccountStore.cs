@@ -165,16 +165,25 @@ public sealed partial class AccountStore(IMongoDatabase database, IOptions<Accou
         return SignInStatus.Success;
     }
 
-    /// <summary>改口令。同时换掉安全戳,让已经发出去的刷新令牌在下次续期时失效。</summary>
+    /// <summary>
+    /// 改口令。同时换掉安全戳 —— 别处的会话 cookie 与刷新令牌带的还是旧戳,
+    /// 下一次请求/续期时会比对不上而被拒(见 Program.cs 的 OnValidatePrincipal
+    /// 与 ConnectEndpoints.ExchangeAsync)。
+    ///
+    /// 新戳同时写回传进来的实例:调用方通常要立刻用它重签当前这台设备的 cookie,
+    /// 否则改完口令的人自己会被下一次请求踢出去。
+    /// </summary>
     public async Task ChangePasswordAsync(MarketAccount account, string password, CancellationToken cancel = default)
     {
+        string stamp = Guid.NewGuid().ToString("N");
         await _accounts.UpdateOneAsync(a => a.Id == account.Id,
             Builders<MarketAccount>.Update
                                    .Set(a => a.PasswordHash, _hasher.HashPassword(account, password))
-                                   .Set(a => a.SecurityStamp, Guid.NewGuid().ToString("N"))
+                                   .Set(a => a.SecurityStamp, stamp)
                                    .Set(a => a.AccessFailedCount, 0)
                                    .Set(a => a.LockoutEndsAt, null),
             cancellationToken: cancel);
+        account.SecurityStamp = stamp;
     }
 
     private async Task RegisterFailureAsync(MarketAccount account, CancellationToken cancel)
