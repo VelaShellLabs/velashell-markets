@@ -1,6 +1,7 @@
 using Amazon.S3;
 using Amazon.S3.Model;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace VelaShell.Market.Infrastructure.Storage;
@@ -13,7 +14,18 @@ namespace VelaShell.Market.Infrastructure.Storage;
 /// 未检测的包就直接可下载了。物理分桶让"没过检测的东西能被下载"这件事需要**两处**同时出错才会发生。
 /// </para>
 /// </summary>
-public sealed class PackageStorage(IAmazonS3 s3, IOptions<ObjectStorageOptions> options, ILogger<PackageStorage> logger)
+/// <param name="s3">服务端自用的客户端(Endpoint,走内网)。所有真正读写对象的操作都用它。</param>
+/// <param name="presigner">
+/// 只用来签下载 URL 的客户端(PublicEndpoint,对外地址)。它一次网络请求都不会发 ——
+/// 预签名是纯本地计算,把 host 换成浏览器能访问的地址,签出来的 URL 才是能点开的。
+/// </param>
+/// <param name="options">对象存储配置(端点、桶名、下载 URL 有效期)。</param>
+/// <param name="logger">日志。</param>
+public sealed class PackageStorage(
+    IAmazonS3 s3,
+    [FromKeyedServices(ObjectStorageOptions.PresignClientKey)] IAmazonS3 presigner,
+    IOptions<ObjectStorageOptions> options,
+    ILogger<PackageStorage> logger)
 {
     private readonly ObjectStorageOptions _options = options.Value;
 
@@ -88,14 +100,17 @@ public sealed class PackageStorage(IAmazonS3 s3, IOptions<ObjectStorageOptions> 
     /// </summary>
     public string CreateDownloadUrl(string key, string fileName)
     {
-        return s3.GetPreSignedURL(new GetPreSignedUrlRequest
+        return presigner.GetPreSignedURL(new GetPreSignedUrlRequest
         {
             BucketName = _options.PublicBucket,
             Key = key,
             Expires = DateTime.UtcNow.Add(_options.DownloadUrlLifetime),
-            // 默认按 HTTPS 签;Endpoint 是 http 的 MinIO 时必须显式改回 HTTP,
-            // 否则签出来的 URL 打不开(MinIO 上根本没有 TLS)。
-            Protocol = Protocol.HTTP,
+            // 协议要跟着 Endpoint 走,不能写死。本机 MinIO 是 http,签成 HTTPS 会打不开;
+            // 而外网部署时 Endpoint 是 https 的对外域名,签成 HTTP 就会在 HTTPS 页面上
+            // 给出一个明文下载地址 —— 轻则被浏览器降级警告,重则被 HTTPS-Only 拦下。
+            Protocol = _options.EffectivePublicEndpoint.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+                           ? Protocol.HTTPS
+                           : Protocol.HTTP,
             // 让浏览器直接落成 .vpx 文件而不是尝试展示。
             ResponseHeaderOverrides = new()
             {

@@ -1,3 +1,12 @@
+# 外层(VPS 上的 nginx)卸载 TLS 之后,转发进来的已经是明文 HTTP,$scheme 恒为 http。
+# 直接把 $scheme 写进 X-Forwarded-Proto 会把外层带来的 https 信息冲掉,后端便以为
+# 整条链路都是明文。这里改成:外层给了就原样透传,没给(本机直连)才回退到 $scheme。
+# map 只能放在 http 上下文 —— conf.d/*.conf 正是被 include 进 http 块的,所以写在这里合法。
+map $http_x_forwarded_proto $forwarded_proto {
+    default $http_x_forwarded_proto;
+    ''      $scheme;
+}
+
 server {
     listen 80;
     server_name _;
@@ -5,7 +14,7 @@ server {
 
     # 运行时注入 OIDC 配置:在 </head> 前插入一段 <script>,把
     # window.__MARKET_AUTHORITY__ / __MARKET_CLIENT_ID__ 设好。
-    # ${...} 这两处由 nginx 镜像的 envsubst 在启动时替换(见 build/web.Dockerfile 的 ENV 默认值),
+    # ${...} 这几处由 nginx 镜像的 envsubst 在启动时替换(见 build/web.Dockerfile 的 ENV 默认值),
     # 这样同一份构建产物可以对接不同环境的认证服务,不需要重新打包。
     # 注意下面的 $uri / $host 等是 nginx 自己的变量,不带花括号,envsubst 不会碰它们。
     sub_filter '</head>' '<script>window.__MARKET_AUTHORITY__="${MARKET_AUTHORITY}";window.__MARKET_CLIENT_ID__="${MARKET_CLIENT_ID}";</script></head>';
@@ -23,9 +32,31 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $forwarded_proto;
         # 插件包最大 512MB,反代这一层也得放开,否则大包在 nginx 就被 413 掉了。
         client_max_body_size 512m;
         proxy_request_buffering off;
+    }
+
+    # 正式桶的下载直通 MinIO。下载地址是 API 用 SigV4 签出来的预签名 URL,
+    # 签名覆盖 **Host 头与路径**(不含协议),所以这里必须原样传 Host、且不改写 URI ——
+    # proxy_pass 后面不带路径正是为了让 /${MARKET_PUBLIC_BUCKET}/... 一字不动地转过去,
+    # 改写任何一处签名都会对不上,MinIO 直接回 403 SignatureDoesNotMatch。
+    #
+    # 这样做的收益:外网只需要暴露前端这一个入口,MinIO 不必单独穿透或单独占一个域名。
+    # 对应地,ObjectStorage__Endpoint 要填成对外域名(见 docs/deployment-nas-frp.md)。
+    location /${MARKET_PUBLIC_BUCKET}/ {
+        proxy_pass http://minio:9000;
+        # 这里必须是 $http_host 而不是 $host:$host 会**丢掉端口**,而签名是按客户端
+        # 实际发出的 Host 头(可能带端口)算的。少了端口,MinIO 算出来的签名就对不上,
+        # 直接回 403 SignatureDoesNotMatch。标准 443 端口下两者恰好相同 —— 正因为如此,
+        # 这个坑在改用非标端口的那天才会突然冒出来。
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $forwarded_proto;
+        # 大包下载:关掉响应缓冲,不然 nginx 会先把整个文件落到磁盘再吐给客户端。
+        proxy_buffering off;
+        proxy_read_timeout 300s;
     }
 }

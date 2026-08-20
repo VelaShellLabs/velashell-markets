@@ -2,6 +2,7 @@ using System.Text.Encodings.Web;
 using System.Text.Unicode;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.WebEncoders;
 using MongoDB.Driver;
 using Serilog;
@@ -18,6 +19,13 @@ builder.Host.UseSerilog((context, config) => config.ReadFrom.Configuration(conte
 
 // ---- 配置 -------------------------------------------------------------------
 builder.Services.Configure<IdentityServerOptions>(builder.Configuration.GetSection(IdentityServerOptions.SectionName));
+// 只认 Proto 与 For 两个转发头;Host 不认,因为 issuer 是显式配置的,不该随请求头飘。
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedFor;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 builder.Services.Configure<AccountOptions>(builder.Configuration.GetSection(AccountOptions.SectionName));
 IdentityServerOptions server = builder.Configuration.GetSection(IdentityServerOptions.SectionName)
                                       .Get<IdentityServerOptions>() ?? new();
@@ -151,6 +159,11 @@ builder.Services.Configure<WebEncoderOptions>(options =>
 WebApplication app = builder.Build();
 
 app.UseSerilogRequestLogging();
+// 反代在最外层卸载 TLS(frp -> nginx),容器收到的是明文 HTTP。不把 X-Forwarded-Proto
+// 还原成请求的 scheme,OpenIddict 在 RequireHttps=true 下会把每个请求都当成不安全传输拒掉,
+// 登录页根本打不开。KnownProxies/KnownNetworks 清空 = 无条件信任转发头,
+// 前提是这个容器只暴露给反代,绝不能直接挂到公网上(见 docs/deployment-nas-frp.md)。
+app.UseForwardedHeaders();
 // 协议层的失败(比如 redirect_uri 不在白名单)由 OpenIddict 归到状态码上,
 // 再由这里重放到 /error 渲染成一句人话,而不是一个空白的 400。
 app.UseStatusCodePagesWithReExecute("/error", "?code={0}");

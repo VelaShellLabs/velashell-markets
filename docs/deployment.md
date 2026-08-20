@@ -2,6 +2,10 @@
 
 分三种场景:本机看效果、单机生产、以及"我已经有 MongoDB / MinIO / 病毒引擎"。
 
+> 要把服务放在内网(NAS 之类)、经 frp 穿透到公网域名上,见
+> [deployment-nas-frp.md](deployment-nas-frp.md) —— 那种拓扑下有三个对外地址要分别配对,
+> 且 TLS 在最外层就终止了,和本文的单机场景差别不小。
+
 ## 一、本机看效果(最短路径)
 
 ```powershell

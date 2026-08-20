@@ -1,6 +1,7 @@
 using Amazon.Runtime;
 using Amazon.S3;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using VelaShell.Market.Api.Endpoints;
@@ -16,6 +17,15 @@ builder.Host.UseSerilog((context, config) => config.ReadFrom.Configuration(conte
 
 // ---- 配置 -------------------------------------------------------------------
 builder.Services.Configure<ObjectStorageOptions>(builder.Configuration.GetSection(ObjectStorageOptions.SectionName));
+// 反代卸载 TLS 后容器只看得到明文 HTTP。还原 X-Forwarded-Proto/For 才能拿到真实的
+// 协议与客户端 IP —— 日志里的来源地址、以及任何按 scheme 生成的链接都靠它。
+// 清空 KnownProxies/KnownNetworks = 无条件信任转发头,前提是本容器只暴露给反代。
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedFor;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 builder.Services.Configure<ClamAvOptions>(builder.Configuration.GetSection(ClamAvOptions.SectionName));
 builder.Services.Configure<MarketAuthOptions>(builder.Configuration.GetSection(MarketAuthOptions.SectionName));
 
@@ -69,16 +79,28 @@ builder.Services.AddAuthorizationBuilder()
 
 // ---- 数据与存储 --------------------------------------------------------------
 builder.Services.AddMongoContext<MarketDbContext>(builder.Configuration.GetConnectionString("Mongo") ?? "mongodb://localhost:27017/velashell-market");
-builder.Services.AddSingleton<IAmazonS3>(provider =>
-{
-    ObjectStorageOptions storage = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<ObjectStorageOptions>>().Value;
-    return new AmazonS3Client(new BasicAWSCredentials(storage.AccessKey, storage.SecretKey), new AmazonS3Config
+static AmazonS3Client BuildS3Client(ObjectStorageOptions storage, string serviceUrl) =>
+    new(new BasicAWSCredentials(storage.AccessKey, storage.SecretKey), new AmazonS3Config
     {
-        ServiceURL = storage.Endpoint,
+        ServiceURL = serviceUrl,
         // MinIO 不支持虚拟主机风格的桶寻址,必须走 path-style。
         ForcePathStyle = true,
         AuthenticationRegion = storage.Region
     });
+
+// 服务端自用:上传落桶、检测通过后复制、删除,全部走这个内网端点。
+builder.Services.AddSingleton<IAmazonS3>(provider =>
+{
+    ObjectStorageOptions storage = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<ObjectStorageOptions>>().Value;
+    return BuildS3Client(storage, storage.Endpoint);
+});
+// 只用来签下载 URL:ServiceURL 换成**浏览器**能访问的对外地址。
+// 签名是纯计算,这个客户端一次请求都不会发,所以指向一个从服务端根本连不通的地址也无妨 ——
+// 反过来,如果拿上面那个内网客户端去签,签出来的 URL 里会是 http://minio:9000,外网点不开。
+builder.Services.AddKeyedSingleton<IAmazonS3>(ObjectStorageOptions.PresignClientKey, (provider, _) =>
+{
+    ObjectStorageOptions storage = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<ObjectStorageOptions>>().Value;
+    return BuildS3Client(storage, storage.EffectivePublicEndpoint);
 });
 builder.Services.AddSingleton<PackageStorage>();
 builder.Services.AddSingleton<ClamAvScanner>();
@@ -105,6 +127,7 @@ builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 
 
 WebApplication app = builder.Build();
 
+app.UseForwardedHeaders();
 app.UseSerilogRequestLogging();
 app.UseExceptionHandler();
 if (app.Environment.IsDevelopment())

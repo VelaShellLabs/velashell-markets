@@ -195,9 +195,15 @@ services:
       - Market__SeedDemoData=${SEED_DEMO_DATA:-false}
       - ASPNETCORE_HTTP_PORTS=8080
       - ConnectionStrings__Mongo=mongodb://${MONGO_ROOT_USER:-market}:${MONGO_ROOT_PASSWORD:-change-me-please}@host.docker.internal:27017,host.docker.internal:27018/velashell-market?authSource=admin&replicaSet=rs0
-      # 用 host.docker.internal 而不是 minio:把预签名 URL 的 host 同时做成
-      # 容器内(经 extra_hosts 走 host-gateway)与宿主机浏览器(Docker Desktop 会解析)都能访问。
-      - ObjectStorage__Endpoint=http://host.docker.internal:9000
+      # API 自己访问对象存储的地址:走 compose 网络,不出容器。
+      - ObjectStorage__Endpoint=http://minio:9000
+      # 签发下载 URL 用的对外地址 —— 这是**下载者浏览器**要访问的 host,与上面那个不是一回事。
+      # 本机默认 host.docker.internal:9000(Docker Desktop 在宿主机浏览器里也解析得了);
+      # 对外部署填对外域名(如 https://mk.oneblogs.cn),由前端 nginx 的
+      # /${MARKET_PUBLIC_BUCKET}/ 反代回 minio,见 docs/deployment-nas-frp.md。
+      - ObjectStorage__PublicEndpoint=${OBJECT_STORAGE_PUBLIC_ENDPOINT:-http://host.docker.internal:9000}
+      # 正式桶名。api 用它签 URL、web 的 nginx 用它开反代 location,两处必须一致。
+      - ObjectStorage__PublicBucket=${PUBLIC_BUCKET:-vpx-public}
       - ObjectStorage__AccessKey=${MINIO_ROOT_USER:-minioadmin}
       - ObjectStorage__SecretKey=${MINIO_ROOT_PASSWORD:-minioadmin}
       - ClamAv__Host=clamav
@@ -225,12 +231,18 @@ services:
     restart: unless-stopped
     depends_on:
       - api
+      # nginx 启动时会解析所有 proxy_pass 的上游主机名,解析不到就直接起不来。
+      # /${MARKET_PUBLIC_BUCKET}/ 这条 location 指向 minio,所以它也得先在。
+      - minio
     environment:
       - TZ=Asia/Chongqing
       # nginx 启动时把这两个值注入页面,前端据此发起 OIDC 登录。
       # 同一份构建产物因此能对接不同环境的认证服务,不必为换个地址重新打包。
       - MARKET_AUTHORITY=${IDENTITY_ISSUER:-http://localhost:7020}
       - MARKET_CLIENT_ID=velashell-market-web
+      # 正式桶名,决定 nginx 那条直通 MinIO 的 location 路径。必须与 api 的
+      # ObjectStorage__PublicBucket 一致,否则预签名 URL 会落到 SPA 的 404 上。
+      - MARKET_PUBLIC_BUCKET=${PUBLIC_BUCKET:-vpx-public}
     ports:
       - "8000:80"
 
