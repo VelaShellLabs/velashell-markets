@@ -24,7 +24,9 @@ const Settings: ProLayoutProps & {
   iconfontUrl: '',
   token: {
     header: {
-      colorBgHeader: '#ffffff',
+      // 写成 CSS 变量而不是写死的颜色:ProLayout 只是把这个值放进 background,
+      // 于是深浅色切换由 global.less 里那两组变量决定,不需要让这份构建期配置变成动态的。
+      colorBgHeader: 'var(--market-header-bg)',
       heightLayoutHeader: 56,
     },
     pageContainer: {

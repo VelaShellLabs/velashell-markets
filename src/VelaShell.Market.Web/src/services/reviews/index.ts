@@ -8,13 +8,20 @@ export async function listReviews(pluginId: string, params: { page: number; size
   });
 }
 
-/** 我对该插件的评价;没有评价过时服务端回 204,这里归一成 null。 */
+/**
+ * 我对该插件的评价;没有评价过时服务端回 204,这里归一成 null。
+ *
+ * `getResponse: true` 拿到的是 **axios 的 AxiosResponse**,状态码在 `status` 上。
+ * 别写成 `{ data, response }` —— 那是 umi 3 的 umi-request 语义,在 umi 4 里
+ * `response` 恒为 undefined,`response.status` 会直接抛 TypeError,
+ * 而调用方一 catch 就变成"永远查不到我的评价",看着像后端没返回。
+ */
 export async function getMyReview(pluginId: string): Promise<MarketAPI.MyReview | null> {
-  const { data, response } = await request<MarketAPI.MyReview>(
+  const { data, status } = await request<MarketAPI.MyReview>(
     `/api/plugins/${pluginId}/reviews/mine`,
     { method: 'GET', getResponse: true, skipErrorHandler: true },
   );
-  return response.status === 204 ? null : data;
+  return status === 204 ? null : data;
 }
 
 /** 发表或修改我的评价(服务端按人按插件 upsert)。 */

@@ -31,6 +31,17 @@ builder.Services.Configure<AccountOptions>(builder.Configuration.GetSection(Acco
 IdentityServerOptions server = builder.Configuration.GetSection(IdentityServerOptions.SectionName)
                                       .Get<IdentityServerOptions>() ?? new();
 
+// issuer 是令牌里的 iss,也是 discovery 里所有端点的前缀。RequireHttps=true 却给一个 http 的 issuer,
+// 结果是 OpenIddict 拒掉每一个请求(登录页都打不开),而报错信息跟真正的原因隔着好几层。
+// 启动就失败,把话说清楚。
+if (server.RequireHttps && !server.Issuer.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+{
+    throw new InvalidOperationException(
+        $"Identity:RequireHttps 为 true,但 Identity:Issuer 是 “{server.Issuer}”。" +
+        "两者必须一致 —— 请把 IDENTITY_ISSUER 换成 https 地址," +
+        "或在还没上 TLS 之前把 IDENTITY_REQUIRE_HTTPS 保持为 false。");
+}
+
 // ---- 数据 --------------------------------------------------------------------
 // 账号与 OpenIddict 自己的四个集合(applications / scopes / authorizations / tokens)同库。
 string connectionString = builder.Configuration.GetConnectionString("Mongo")

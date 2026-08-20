@@ -3,9 +3,21 @@ import { type Settings as LayoutSettings } from '@ant-design/pro-components';
 import { history, type RequestConfig, type RunTimeLayoutConfig } from '@umijs/max';
 import { Avatar, Button, Dropdown } from 'antd';
 import defaultSettings from '../config/defaultSettings';
+import { ThemeSwitch } from './components';
 import { errorConfig } from './requestErrorConfig';
 import { getProfile } from './services/me';
+import { isDarkNow } from './theme';
+import ThemeProvider from './theme/ThemeProvider';
 import { getUser, login, logout } from './utils/auth';
+
+/**
+ * 整棵树最外面套一层主题。**必须在这里而不是页面里** —— message / modal / notification
+ * 都是从根上挂出去的,包不住它们就会出现"页面暗了、弹窗还是亮的"。
+ * @doc https://umijs.org/docs/api/runtime-config#rootcontainer
+ */
+export function rootContainer(container: React.ReactNode) {
+  return <ThemeProvider>{container}</ThemeProvider>;
+}
 
 /**
  * 全局初始状态:当前登录用户。access.ts 用它算权限,布局用它渲染头像区。
@@ -40,9 +52,13 @@ export async function getInitialState(): Promise<{
  */
 export const layout: RunTimeLayoutConfig = ({ initialState }) => {
   const currentUser = (initialState as any)?.currentUser as MarketAPI.Profile | null | undefined;
+  // 顶栏的配色 ProLayout 自己管,不吃 antd 的暗色算法 —— 不跟着切的话,
+  // 深色顶栏上会留一排深色菜单文字,基本看不见。
+  const dark = isDarkNow();
   return {
-    // 右上角:GitHub 入口 + 登录按钮/用户菜单。
+    // 右上角:外观切换 + GitHub 入口 + 登录按钮/用户菜单。
     actionsRender: () => [
+      <ThemeSwitch key="theme" />,
       <Button
         key="github"
         type="text"
@@ -78,6 +94,9 @@ export const layout: RunTimeLayoutConfig = ({ initialState }) => {
     ),
     menuHeaderRender: undefined,
     ...(initialState as any)?.settings,
+    // 必须放在展开**之后**:defaultSettings 里也有一个写死的 navTheme: 'light',
+    // 放在前面会被它盖掉,表现是深色下顶栏文字仍然是深的。
+    navTheme: dark ? 'realDark' : 'light',
   };
 };
 

@@ -1,10 +1,50 @@
 /* 全站样式。只放三类东西:页面容器、市场特有的卡片/评价/报告样式、Markdown 正文排版。
-   组件级观感一律交给 antd 的主题令牌(见 config/config.ts 的 antd.configProvider),
-   在这里覆盖组件样式会让主题切换失效。 */
+   组件级观感一律交给 antd 的主题令牌(见 src/theme/index.ts 的 themeTokens),
+   在这里覆盖组件样式会让主题切换失效。
+
+   深浅色:这批自定义类不是 antd 组件,拿不到主题令牌,所以颜色一律走下面这组
+   CSS 变量,由 <html data-theme> 切换(见 src/theme/ThemeProvider.tsx)。
+   **新增样式时不要再写死颜色** —— 写死一个,深色模式下就多一处白底白字。 */
 
 :root {
   /* 顶栏与页面内容共用同一个左右内边距,两者的左右边缘才对得齐。 */
   --market-page-pad: 32px;
+
+  /* ---- 浅色(默认) ---- */
+  --market-header-bg: #ffffff;
+  --market-text: #344054;        /* 正文 */
+  --market-text-strong: #101828; /* 标题、卡片名 */
+  --market-text-muted: #667085;  /* 摘要、次要说明 */
+  --market-text-faint: #98a2b3;  /* 作者、计数、页脚 */
+  --market-border: #eaecf0;      /* 表格线、虚线分隔 */
+  --market-border-soft: #f2f4f7; /* 卡片底部细线 */
+  --market-card-border: #eceef3;
+  --market-card-hover-border: #c7d2fe;
+  --market-card-hover-shadow: rgba(79, 70, 229, 0.12);
+  --market-fill: #f2f4f7;        /* 行内代码底、分布条轨道 */
+  --market-fill-subtle: #f9fafb; /* 表头底 */
+  --market-quote-border: #d0d5dd;
+  --market-link: #4f46e5;
+}
+
+/* ---- 深色 ----
+   不用纯黑:大面积 #000 配白字对比过强,长时间看很累。这组值贴着 antd 暗色算法
+   的中性色走,自定义区块与 antd 组件放在一起才不会像两张皮。 */
+:root[data-theme='dark'] {
+  --market-header-bg: #1c1c21;
+  --market-text: rgba(255, 255, 255, 0.82);
+  --market-text-strong: rgba(255, 255, 255, 0.92);
+  --market-text-muted: rgba(255, 255, 255, 0.55);
+  --market-text-faint: rgba(255, 255, 255, 0.38);
+  --market-border: #303036;
+  --market-border-soft: #2a2a30;
+  --market-card-border: #303036;
+  --market-card-hover-border: #4d47a3;
+  --market-card-hover-shadow: rgba(0, 0, 0, 0.45);
+  --market-fill: rgba(255, 255, 255, 0.08);
+  --market-fill-subtle: rgba(255, 255, 255, 0.04);
+  --market-quote-border: #3f3f46;
+  --market-link: #8b83f0;
 }
 
 body {
@@ -33,10 +73,18 @@ body {
   padding-inline: var(--market-page-pad);
 }
 
+/* defaultSettings 里的 colorBgHeader 已经是 var(--market-header-bg),正常情况下够了。
+   这条是兜底:ProLayout 换了版本、token 名字变了的话,顶栏不至于在深色页面上留一条白带。 */
+:root[data-theme='dark'] .ant-pro-layout .ant-pro-top-nav-header,
+:root[data-theme='dark'] .ant-pro-layout .ant-pro-global-header {
+  background: var(--market-header-bg);
+}
+
 .market-page {
   padding: 28px var(--market-page-pad) 56px;
 }
 
+/* 渐变色块在深浅色下都成立,不随主题变 —— 它本来就是一块自带背景的彩色区域。 */
 .market-hero {
   background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #9333ea 100%);
   border-radius: 14px;
@@ -59,7 +107,7 @@ body {
 
 .market-footer {
   text-align: center;
-  color: #98a2b3;
+  color: var(--market-text-faint);
   background: transparent;
   font-size: 13px;
   padding: 16px 0;
@@ -78,14 +126,14 @@ body {
 
 .plugin-card {
   height: 100%;
-  border-color: #eceef3;
+  border-color: var(--market-card-border);
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
 .plugin-card:hover {
   transform: translateY(-2px);
-  border-color: #c7d2fe;
-  box-shadow: 0 10px 28px rgba(79, 70, 229, 0.12);
+  border-color: var(--market-card-hover-border);
+  box-shadow: 0 10px 28px var(--market-card-hover-shadow);
 }
 
 .plugin-card-head {
@@ -119,7 +167,7 @@ body {
   font-weight: 600;
   font-size: 16px;
   line-height: 1.4;
-  color: #101828;
+  color: var(--market-text-strong);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -141,7 +189,7 @@ body {
 .plugin-card-author {
   flex: 1;
   min-width: 0;
-  color: #98a2b3;
+  color: var(--market-text-faint);
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -149,7 +197,7 @@ body {
 }
 
 .plugin-card-summary {
-  color: #667085;
+  color: var(--market-text-muted);
   font-size: 13px;
   line-height: 1.6;
   margin: 14px 0 12px;
@@ -180,11 +228,11 @@ body {
   justify-content: space-between;
   gap: 8px;
   padding-top: 10px;
-  border-top: 1px solid #f2f4f7;
+  border-top: 1px solid var(--market-border-soft);
 }
 
 .plugin-card-meta {
-  color: #98a2b3;
+  color: var(--market-text-faint);
   font-size: 12px;
   display: inline-flex;
   align-items: center;
@@ -210,7 +258,7 @@ body {
   font-size: 40px;
   font-weight: 650;
   line-height: 1.1;
-  color: #101828;
+  color: var(--market-text-strong);
 }
 
 .review-summary-bars {
@@ -226,17 +274,18 @@ body {
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: #667085;
+  color: var(--market-text-muted);
 }
 
 .review-bar-track {
   flex: 1;
   height: 8px;
   border-radius: 4px;
-  background: #f2f4f7;
+  background: var(--market-fill);
   overflow: hidden;
 }
 
+/* 星级色在深浅色下都够亮,不随主题变。 */
 .review-bar-fill {
   height: 100%;
   border-radius: 4px;
@@ -246,12 +295,12 @@ body {
 .review-bar-count {
   min-width: 28px;
   text-align: right;
-  color: #98a2b3;
+  color: var(--market-text-faint);
 }
 
 /* 我自己那条评价:渲染成普通评价的样子放在最上面,而不是塞回输入框。 */
 .my-review-body {
-  color: #344054;
+  color: var(--market-text);
   line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
@@ -262,7 +311,7 @@ body {
    服务端已用 Markdig 关掉 HTML 直通并清洗过 scheme 与内联事件,这里只管排版。 */
 
 .markdown-body {
-  color: #344054;
+  color: var(--market-text);
   line-height: 1.75;
   font-size: 14px;
   word-wrap: break-word;
@@ -271,7 +320,7 @@ body {
 .markdown-body h1,
 .markdown-body h2,
 .markdown-body h3 {
-  color: #101828;
+  color: var(--market-text-strong);
   margin: 22px 0 10px;
   line-height: 1.35;
 }
@@ -284,20 +333,21 @@ body {
 .markdown-body p { margin: 0 0 12px; }
 
 .markdown-body a {
-  color: #4f46e5;
+  color: var(--market-link);
   text-decoration: none;
 }
 
 .markdown-body a:hover { text-decoration: underline; }
 
 .markdown-body code {
-  background: #f2f4f7;
+  background: var(--market-fill);
   border-radius: 4px;
   padding: 1px 5px;
   font-size: 12.5px;
   font-family: 'Cascadia Code', Consolas, monospace;
 }
 
+/* 代码块本来就是深色的,两种主题下都保持原样 —— 代码高亮的配色不该跟着页面翻转。 */
 .markdown-body pre {
   background: #1e1e2e;
   color: #e6e6f0;
@@ -315,8 +365,8 @@ body {
 .markdown-body blockquote {
   margin: 0 0 12px;
   padding: 2px 14px;
-  border-left: 3px solid #d0d5dd;
-  color: #667085;
+  border-left: 3px solid var(--market-quote-border);
+  color: var(--market-text-muted);
 }
 
 .markdown-body table {
@@ -330,12 +380,12 @@ body {
 
 .markdown-body th,
 .markdown-body td {
-  border: 1px solid #eaecf0;
+  border: 1px solid var(--market-border);
   padding: 7px 10px;
   text-align: left;
 }
 
-.markdown-body th { background: #f9fafb; }
+.markdown-body th { background: var(--market-fill-subtle); }
 
 .markdown-body img { max-width: 100%; }
 
@@ -346,7 +396,7 @@ body {
   gap: 8px;
   align-items: flex-start;
   padding: 7px 0;
-  border-bottom: 1px dashed #eaecf0;
+  border-bottom: 1px dashed var(--market-border);
   font-size: 13px;
 }
 
@@ -355,11 +405,11 @@ body {
 .finding-code {
   font-family: 'Cascadia Code', Consolas, monospace;
   font-size: 12px;
-  color: #667085;
+  color: var(--market-text-muted);
   white-space: nowrap;
 }
 
 .finding-path {
-  color: #98a2b3;
+  color: var(--market-text-faint);
   font-size: 12px;
 }

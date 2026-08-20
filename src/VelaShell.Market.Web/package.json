@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "max dev",
     "build": "max build",
-    "postinstall": "max setup"
+    "postinstall": "max setup",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.2",

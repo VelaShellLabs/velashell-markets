@@ -59,19 +59,14 @@ export default defineConfig({
   },
   /**
    * @name antd 插件
-   * @description 主题令牌整站只在这里定一次,分散到各页会出现"这一页是亮的、那一页是暗的"。
+   * @description
+   * 这里**不再配 theme** —— 主题令牌搬到了运行期的 src/theme/index.ts(themeTokens),
+   * 因为它要随深浅色切换,而这份配置是构建期固定的。
+   *
+   * 留在这里的话还会反过来坏事:umi 的 ConfigProvider 在 rootContainer 那层主题的**内部**,
+   * 内层写死的 colorBgLayout 会把外层算出来的暗色背景覆盖回浅色。
    */
   antd: {
-    configProvider: {
-      theme: {
-        token: {
-          colorPrimary: '#4f46e5',
-          borderRadius: 8,
-          fontSize: 14,
-          colorBgLayout: '#f6f7fb',
-        },
-      },
-    },
     appConfig: {
       message: {
         maxCount: 3,

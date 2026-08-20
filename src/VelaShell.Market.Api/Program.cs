@@ -38,6 +38,18 @@ MarketAuthOptions auth = builder.Configuration.GetSection(MarketAuthOptions.Sect
 string internalAuthority = string.IsNullOrWhiteSpace(auth.Authority) ? auth.Issuer : auth.Authority;
 bool authorityDiffersFromIssuer = !string.Equals(internalAuthority.TrimEnd('/'), auth.Issuer.TrimEnd('/'), StringComparison.OrdinalIgnoreCase);
 
+// "要求 HTTPS"这件事约束的是**对外**那条链路 —— discovery 与 JWKS 的地址都从 issuer 派生。
+// issuer 还是 http 却把这个开关打开,是自相矛盾的配置:开关看着开了,实际什么也没保护。
+// 与其让它静默地毫无作用,不如启动就失败,把话说清楚。
+// (容器网络内部那一跳走 http 是正常的,由 PatchingDocumentRetriever 单独判断。)
+if (auth.RequireHttpsMetadata && !auth.Issuer.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+{
+    throw new InvalidOperationException(
+        $"Auth:RequireHttpsMetadata 为 true,但 Auth:Issuer 是 “{auth.Issuer}”。" +
+        "要求 HTTPS 元数据时 issuer 必须是 https —— 请把 IDENTITY_ISSUER 换成 https 地址," +
+        "或在还没上 TLS 之前把 AUTH_REQUIRE_HTTPS 保持为 false。");
+}
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
        .AddJwtBearer(options =>
        {
@@ -50,7 +62,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                // discovery 文档里的 jwks_uri 是按 issuer 生成的,容器内不可达;
                // 这个 ConfigurationManager 负责把它改写到内部地址上,详见该类的注释。
                options.ConfigurationManager = new VelaShell.Market.Api.InternalAuthorityConfigurationManager(
-                   auth.Issuer, internalAuthority, auth.RequireHttpsMetadata);
+                   auth.Issuer, internalAuthority);
            }
            options.TokenValidationParameters = new TokenValidationParameters
            {
