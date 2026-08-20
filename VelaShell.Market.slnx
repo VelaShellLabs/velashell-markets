@@ -12,18 +12,11 @@
     <Project Path="src/VelaShell.Market.Domain/VelaShell.Market.Domain.csproj" />
     <Project Path="src/VelaShell.Market.Identity/VelaShell.Market.Identity.csproj" />
     <Project Path="src/VelaShell.Market.Infrastructure/VelaShell.Market.Infrastructure.csproj" />
-    <Project Path="src/VelaShell.Market.Web/VelaShell.Market.Web.esproj">
-      <Build />
-      <Deploy />
-    </Project>
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/VelaShell.Market.Tests/VelaShell.Market.Tests.csproj" />
   </Folder>
   <Project Path="docker-compose.dcproj">
     <Build />
-    <!-- 前端产物 dist/ 由 Web 项目在本机打包,compose 只是把它装进 nginx 镜像。
-         这条依赖保证打镜像时 dist/ 已经是新的。 -->
-    <BuildDependency Project="src/VelaShell.Market.Web/VelaShell.Market.Web.esproj" />
   </Project>
 </Solution>
