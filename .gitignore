@@ -15,3 +15,6 @@ src/VelaShell.Market.Identity/keys/
 TestResults/
 /.omo/*
 .omc
+/artifacts
+# 镜像导出产物(build/Export-Images.ps1),一百多 MB 一个,不进仓库。
+build/*.tar
