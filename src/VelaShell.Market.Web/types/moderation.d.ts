@@ -3,12 +3,31 @@ declare namespace ModerationAPI {
   type PendingVersion = {
     id: string;
     pluginId: string;
+    displayName: string;
     version: string;
     uploadedBySubject: string;
+    uploadedByName?: string | null;
     uploadedAt: string;
     packageSize: number;
     signature: MarketAPI.SignatureState;
+    /** 这个插件此前有多少个版本平安通过 —— 判断"换签名密钥"这类告警时最有用的背景。 */
+    publishedVersions: number;
+    scan: MarketAPI.Scan;
     findings: MarketAPI.Finding[];
+  };
+
+  /** 包内清单的一条。flag 与检测器共用同一组扩展名表。 */
+  type PackageEntry = {
+    path: string;
+    size: number;
+    compressed: number;
+    flag?: 'blocked' | 'suspicious' | null;
+  };
+
+  type PackageEntries = {
+    total: number;
+    truncated: boolean;
+    entries: PackageEntry[];
   };
 
   /** 插件治理列表里的一条。与 PluginSummary 不同,它**包含已下架的条目**。 */
@@ -22,6 +41,8 @@ declare namespace ModerationAPI {
     downloads: number;
     ratingAverage: number;
     ratingCount: number;
+    isFeatured: boolean;
+    featuredAt?: string;
     isUnlisted: boolean;
     unlistedReason?: string;
     unlistedAt?: string;

@@ -2,7 +2,10 @@
 declare namespace MeAPI {
   /** /me:是不是审核员由服务端说了算,前端只拿结论决定要不要露入口。 */
   type Profile = {
+    /** OIDC 的 sub。账户页要把它显示出来 —— 审核员名单按它配。 */
+    subject: string;
     name: string;
+    email?: string | null;
     isModerator: boolean;
   };
 

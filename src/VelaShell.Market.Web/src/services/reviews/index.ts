@@ -1,7 +1,7 @@
 import { request } from '@umijs/max';
 
-/** 某插件的评价列表(带各星级分布)。 */
-export async function listReviews(pluginId: string, params: { page: number; size: number }) {
+/** 某插件的评价列表(带各星级分布)。sort:recent / lowest / highest。 */
+export async function listReviews(pluginId: string, params: { page: number; size: number; sort?: string }) {
   return request<ReviewsAPI.ReviewPage>(`/api/plugins/${pluginId}/reviews`, { method: 'GET', params });
 }
 
@@ -26,4 +26,17 @@ export async function upsertReview(pluginId: string, data: ReviewsAPI.ReviewDraf
 /** 删除我的评价。 */
 export async function deleteReview(pluginId: string) {
   return request(`/api/plugins/${pluginId}/reviews`, { method: 'DELETE' });
+}
+
+/**
+ * 插件作者公开回复一条评价。只有拥有者能调,而且**回复不会动评价本身** ——
+ * 这是作者面对差评时唯一的正当出口;没有它,唯一的出口就是去找审核员要求隐藏。
+ */
+export async function replyToReview(pluginId: string, reviewId: string, body: string) {
+  return request(`/api/plugins/${pluginId}/reviews/${reviewId}/reply`, { method: 'PUT', data: { body } });
+}
+
+/** 撤下作者回复。 */
+export async function deleteReviewReply(pluginId: string, reviewId: string) {
+  return request(`/api/plugins/${pluginId}/reviews/${reviewId}/reply`, { method: 'DELETE' });
 }

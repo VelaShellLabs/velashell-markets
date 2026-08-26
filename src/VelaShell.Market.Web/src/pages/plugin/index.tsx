@@ -1,15 +1,16 @@
-import { Alert, App, Button, Card, Col, Descriptions, Result, Row, Skeleton, Space, Table, Tabs, Tag, Typography } from 'antd';
-import { PluginIcon, SignatureTag } from '@/components';
-import { formatDate, formatRating, formatSize } from '@/utils/format';
-import { getDownloadUrl, getPlugin } from '@/services/market';
-import { useModel, useParams, useRequest } from '@umijs/max';
-
-import { CloudDownloadOutlined } from '@ant-design/icons';
-import ReviewSection from './components/ReviewSection';
+import { Chip, PluginIcon, SignatureTag } from '@/components';
+import { getDownloadUrl, getPlugin, getRelated } from '@/services/market';
 import { getMyPlugins } from '@/services/me';
+import { formatDate, formatRelative, formatSize } from '@/utils/format';
 import { keepResult } from '@/utils/request';
+import { CloudDownloadOutlined, CopyOutlined, InfoCircleOutlined, ThunderboltFilled } from '@ant-design/icons';
+import { Link, useModel, useParams, useRequest } from '@umijs/max';
+import { Alert, App, Button, Result, Skeleton, Table, Tabs, Typography } from 'antd';
+import ContributesBox from './components/ContributesBox';
+import DetailRail from './components/DetailRail';
+import ReviewSection from './components/ReviewSection';
 
-/** 插件详情页:左侧内容(说明/版本/评价),右侧元信息与下载。 */
+/** 插件详情页:头部动作区 + 说明/版本/评价三页签,右侧是发丝线分区的信息栏。 */
 export default function PluginDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const { message } = App.useApp();
@@ -17,9 +18,10 @@ export default function PluginDetailPage() {
   const signedIn = !!initialState?.currentUser;
 
   const { data, error } = useRequest(() => getPlugin(id), { formatResult: keepResult, refreshDeps: [id], onError: () => undefined });
+  const { data: related } = useRequest(() => getRelated(id), { formatResult: keepResult, refreshDeps: [id], onError: () => undefined });
 
   /**
-   * 是不是拥有者决定评价区的形态(自己不能评自己)。
+   * 是不是拥有者决定评价区的形态(自己不能评自己,但能回复别人)。
    * `ready` 挡住匿名访客:详情页是全站最常被打开的一页,没登录还去打一次 /me/plugins
    * 只会换回一个 401。
    */
@@ -35,15 +37,22 @@ export default function PluginDetailPage() {
     }
   };
 
+  const copyId = async () => {
+    try {
+      await navigator.clipboard.writeText(id);
+      message.success('已复制插件 id');
+    } catch {
+      message.warning('浏览器不允许写剪贴板,请手动复制');
+    }
+  };
+
   if (error) {
     return <Result status="404" title="插件不存在" subTitle="它可能已被下架,或者链接有误。" />;
   }
   if (!data) {
     return (
       <div className="market-page">
-        <Card>
-          <Skeleton active paragraph={{ rows: 8 }} />
-        </Card>
+        <Skeleton active paragraph={{ rows: 8 }} />
       </div>
     );
   }
@@ -51,163 +60,152 @@ export default function PluginDetailPage() {
   const latest = data.versions[0];
 
   return (
-    <div className="market-page">
-      <Row gutter={24}>
-        <Col xs={24} lg={17}>
-          <Space align="start" size={16} style={{ marginBottom: 20 }}>
-            <PluginIcon id={data.id} name={data.displayName} size={64} />
-            <Space orientation="vertical" size={4}>
-              <Space align="center" wrap>
-                <Typography.Title level={3} style={{ margin: 0 }}>
-                  {data.displayName}
-                </Typography.Title>
-                {latest ? (
-                  <Tag color="blue" bordered={false}>
-                    v{latest.version}
-                  </Tag>
-                ) : null}
-                {latest ? <SignatureTag state={latest.signature} /> : null}
-              </Space>
-              <Typography.Text type="secondary">{data.summary}</Typography.Text>
-              <Space size={4} wrap style={{ marginTop: 6 }}>
-                {data.tags?.map((item) => (
-                  <Tag key={item} bordered={false}>
-                    {item}
-                  </Tag>
+    <div className="market-shell">
+      <nav className="detail-crumbs">
+        <Link to="/">浏览</Link>
+        <span>/</span>
+        <span>{data.displayName}</span>
+      </nav>
+
+      <header className="detail-head">
+        <div className="detail-head-left">
+          <PluginIcon id={data.id} name={data.displayName} size={72} />
+          <div className="detail-titles">
+            <div className="detail-title-row">
+              <h1>{data.displayName}</h1>
+              {latest ? <span className="detail-version-pill">v{latest.version}</span> : null}
+              {latest ? <SignatureTag state={latest.signature} /> : null}
+              {data.isFeatured ? (
+                <Chip tone="accent" icon={<ThunderboltFilled />}>
+                  编辑推荐
+                </Chip>
+              ) : null}
+            </div>
+
+            {data.summary ? <p className="detail-summary">{data.summary}</p> : null}
+
+            <div className="detail-meta">
+              <span>{data.author ?? data.ownerName ?? data.id}</span>
+              {data.license ? (
+                <>
+                  <span>·</span>
+                  <span>{data.license}</span>
+                </>
+              ) : null}
+              {latest ? (
+                <>
+                  <span>·</span>
+                  <span className="mono">
+                    apiLevel {latest.apiLevel}
+                    {latest.minHostVersion ? ` · host ≥ ${latest.minHostVersion}` : ''}
+                  </span>
+                </>
+              ) : null}
+              <span>·</span>
+              <span>{formatRelative(data.updatedAt)}更新</span>
+            </div>
+
+            {data.tags?.length ? (
+              <div className="plugin-card-tags">
+                {data.tags.map((item) => (
+                  <Chip key={item}>{item}</Chip>
                 ))}
-              </Space>
-            </Space>
-          </Space>
+              </div>
+            ) : null}
+          </div>
+        </div>
 
-          <Card>
-            <Tabs
-              items={[
-                {
-                  key: 'readme',
-                  label: '说明',
-                  // 描述被审核员清空时,必须说清"这里为什么是空的" ——
-                  // 否则读者只会以为作者懒得写,而作者也不知道自己该改什么。
-                  children: data.descriptionRemovedReason ? (
-                    <Alert type="warning" showIcon message="该说明因违规已被移除" description={data.descriptionRemovedReason} />
-                  ) : data.descriptionHtml ? (
-                    <div className="markdown-body" dangerouslySetInnerHTML={{ __html: data.descriptionHtml }} />
-                  ) : (
-                    <Typography.Text type="secondary">作者还没有填写说明。</Typography.Text>
-                  ),
-                },
-                {
-                  key: 'versions',
-                  label: `版本 (${data.versions.length})`,
-                  children: (
-                    <Table<MarketAPI.Version>
-                      rowKey="version"
-                      dataSource={data.versions}
-                      pagination={false}
-                      size="middle"
-                      scroll={{ x: 720 }}
-                      expandable={{
-                        rowExpandable: (row) => !!row.releaseNotesHtml,
-                        expandedRowRender: (row) => <div className="markdown-body" dangerouslySetInnerHTML={{ __html: row.releaseNotesHtml }} />,
-                      }}
-                      columns={[
-                        { title: '版本', dataIndex: 'version', render: (value) => <Typography.Text strong>{value}</Typography.Text> },
-                        { title: 'apiLevel', dataIndex: 'apiLevel', width: 92 },
-                        { title: '最低宿主版本', dataIndex: 'minHostVersion', render: (value) => value ?? '—' },
-                        { title: '宿主模式', dataIndex: 'hostMode', render: (value) => <Tag bordered={false}>{value}</Tag> },
-                        { title: '大小', dataIndex: 'packageSize', render: formatSize },
-                        { title: '签名', dataIndex: 'signature', render: (value) => <SignatureTag state={value} /> },
-                        { title: '下载', dataIndex: 'downloads', width: 80 },
-                        {
-                          title: '',
-                          width: 110,
-                          render: (_, row) => (
-                            <Button type="link" icon={<CloudDownloadOutlined />} onClick={() => download(row.version)}>
-                              下载
-                            </Button>
-                          ),
-                        },
-                      ]}
-                    />
-                  ),
-                },
-                {
-                  key: 'reviews',
-                  label: `评价 (${data.ratingCount})`,
-                  children: <ReviewSection pluginId={id} isOwner={isOwner} />,
-                },
-              ]}
-            />
-          </Card>
-        </Col>
-
-        <Col xs={24} lg={7}>
-          <Card size="small" style={{ marginBottom: 16 }}>
-            <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-              <Button type="primary" size="large" block icon={<CloudDownloadOutlined />} disabled={!latest} onClick={() => latest && download(latest.version)}>
-                下载 .vpx
-              </Button>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                在 VelaShell 的插件管理页「安装 .vpx…」选择该文件即可安装。
-              </Typography.Text>
-            </Space>
-          </Card>
-
-          <Card size="small" title="信息" style={{ marginBottom: 16 }}>
-            <Descriptions column={1} size="small" colon={false}>
-              <Descriptions.Item label="插件 id">
-                <Typography.Text copyable code style={{ fontSize: 12 }}>
-                  {data.id}
-                </Typography.Text>
-              </Descriptions.Item>
-              <Descriptions.Item label="作者">{data.author ?? '—'}</Descriptions.Item>
-              <Descriptions.Item label="许可证">{data.license ?? '—'}</Descriptions.Item>
-              <Descriptions.Item label="主页">
-                {data.homepage ? (
-                  <a href={data.homepage} target="_blank" rel="noreferrer noopener">
-                    {data.homepage}
-                  </a>
-                ) : (
-                  '—'
-                )}
-              </Descriptions.Item>
-              <Descriptions.Item label="下载量">{data.downloads}</Descriptions.Item>
-              <Descriptions.Item label="评分">{formatRating(data.ratingAverage, data.ratingCount)}</Descriptions.Item>
-              <Descriptions.Item label="更新于">{formatDate(data.updatedAt)}</Descriptions.Item>
-            </Descriptions>
-          </Card>
-
+        <div className="detail-head-right">
+          <div style={{ display: 'flex', gap: 9 }}>
+            <Button icon={<CopyOutlined />} onClick={copyId}>
+              复制插件 id
+            </Button>
+            <Button type="primary" size="large" icon={<CloudDownloadOutlined />} disabled={!latest} onClick={() => latest && download(latest.version)}>
+              下载 .vpx
+            </Button>
+          </div>
           {latest ? (
-            <Card size="small" title="完整性校验">
-              <Space orientation="vertical" size={8} style={{ width: '100%' }}>
-                <Alert
-                  type="info"
-                  showIcon
-                  title="下载后可核对校验和"
-                  description={
-                    <span>
-                      用 <code>vela-plugin verify</code> 可以一并校验容器完整性与签名。
-                    </span>
-                  }
-                />
-                <div>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    载荷 SHA-256
-                  </Typography.Text>
-                  <Typography.Paragraph copyable={{ text: latest.payloadSha256 }} className="market-hash">
-                    {latest.payloadSha256}
-                  </Typography.Paragraph>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    整包 SHA-256
-                  </Typography.Text>
-                  <Typography.Paragraph copyable={{ text: latest.fileSha256 }} className="market-hash market-hash-last">
-                    {latest.fileSha256}
-                  </Typography.Paragraph>
-                </div>
-              </Space>
-            </Card>
+            <span className="mono" style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>
+              {formatSize(latest.packageSize)} · 已被下载 {data.downloads} 次
+            </span>
           ) : null}
-        </Col>
-      </Row>
+          {/* 安装必须走宿主 —— `vela-plugin install` 在 CLI 里是**禁用**的,
+              它会绕过发布者授权与受保护安装收据。这里就照实说,不要编一条命令行。 */}
+          <span className="detail-install-hint">
+            <InfoCircleOutlined />在 VelaShell 的插件管理页「安装 .vpx…」选中下载好的文件即可安装
+          </span>
+        </div>
+      </header>
+
+      <div className="detail-body">
+        <main className="detail-main">
+          <Tabs
+            items={[
+              {
+                key: 'readme',
+                label: '说明',
+                // 描述被审核员清空时,必须说清"这里为什么是空的" ——
+                // 否则读者只会以为作者懒得写,而作者也不知道自己该改什么。
+                children: (
+                  <>
+                    {data.descriptionRemovedReason ? (
+                      <Alert type="warning" showIcon message="该说明因违规已被移除" description={data.descriptionRemovedReason} style={{ marginBottom: 16 }} />
+                    ) : data.descriptionHtml ? (
+                      <div className="markdown-body" dangerouslySetInnerHTML={{ __html: data.descriptionHtml }} />
+                    ) : (
+                      <Typography.Text type="secondary">作者还没有填写说明。</Typography.Text>
+                    )}
+                    <ContributesBox contributes={latest?.contributes} hostMode={latest?.hostMode} idlePolicy={latest?.idlePolicy} />
+                  </>
+                ),
+              },
+              {
+                key: 'versions',
+                label: `版本 (${data.versions.length})`,
+                children: (
+                  <Table<MarketAPI.Version>
+                    rowKey="version"
+                    dataSource={data.versions}
+                    pagination={false}
+                    size="middle"
+                    scroll={{ x: 760 }}
+                    expandable={{
+                      rowExpandable: (row) => !!row.releaseNotesHtml,
+                      expandedRowRender: (row) => <div className="markdown-body" dangerouslySetInnerHTML={{ __html: row.releaseNotesHtml }} />,
+                    }}
+                    columns={[
+                      { title: '版本', dataIndex: 'version', render: (value) => <span className="mono">v{value}</span> },
+                      { title: 'apiLevel', dataIndex: 'apiLevel', width: 92 },
+                      { title: '最低宿主版本', dataIndex: 'minHostVersion', render: (value) => <span className="mono">{value ?? '—'}</span> },
+                      { title: '宿主模式', dataIndex: 'hostMode', render: (value) => <Chip>{value === 'Isolated' ? '隔离进程' : '进程内'}</Chip> },
+                      { title: '大小', dataIndex: 'packageSize', render: formatSize },
+                      { title: '签名', dataIndex: 'signature', render: (value) => <SignatureTag state={value} icon={false} /> },
+                      { title: '发布于', dataIndex: 'publishedAt', width: 120, render: formatDate },
+                      { title: '下载', dataIndex: 'downloads', width: 80 },
+                      {
+                        title: '',
+                        width: 100,
+                        render: (_, row) => (
+                          <Button type="link" icon={<CloudDownloadOutlined />} onClick={() => download(row.version)}>
+                            下载
+                          </Button>
+                        ),
+                      },
+                    ]}
+                  />
+                ),
+              },
+              {
+                key: 'reviews',
+                label: `评价 (${data.ratingCount})`,
+                children: <ReviewSection pluginId={id} isOwner={isOwner} />,
+              },
+            ]}
+          />
+        </main>
+
+        <DetailRail plugin={data} latest={latest} related={related} />
+      </div>
     </div>
   );
 }

@@ -17,9 +17,11 @@
   }
   var dark = mode === 'dark' || (mode !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
-  var bg = dark ? '#16161a' : '#f6f7fb';
-  var fg = dark ? 'rgba(255,255,255,0.45)' : '#98a2b3';
-  var ring = dark ? 'rgba(255,255,255,0.14)' : '#e4e7ec';
+  // 这四个值必须与 global.less 顶部那组变量对齐(--canvas / --ink-3 / --hairline / --accent),
+  // 否则首屏占位与真正渲染出来的页面之间会有一次可见的跳色。
+  var bg = dark ? '#0e1014' : '#f5f6f8';
+  var fg = dark ? '#6a7383' : '#8c96a6';
+  var ring = dark ? '#272b33' : '#e4e7ec';
   var accent = dark ? '#7c74f2' : '#4f46e5';
 
   // 顺手把 html 的配色也定下来,原生滚动条不会先亮一下再变暗。

@@ -16,8 +16,9 @@ public static class PluginEndpoints
     {
         RouteGroupBuilder group = app.MapGroup("/api/plugins").WithTags("Plugins").AllowAnonymous();
 
-        group.MapGet("/", SearchAsync).WithSummary("检索插件(关键词/标签/宿主兼容性,分页)。");
-        group.MapGet("/{id}", DetailAsync).WithSummary("插件详情,含渲染后的 Markdown 与已发布版本列表。");
+        group.MapGet("/", SearchAsync).WithSummary("检索插件(关键词/标签/宿主兼容性/是否推荐,分页)。");
+        group.MapGet("/{id}", DetailAsync).WithSummary("插件详情,含渲染后的 Markdown、已发布版本列表与公开的检测结论。");
+        group.MapGet("/{id}/related", RelatedAsync).WithSummary("同一作者的其他插件与标签相近的插件。");
         group.MapGet("/{id}/versions/{version}/download", DownloadAsync).WithSummary("换取一个短时效下载 URL(仅正式桶)。");
         group.MapGet("/tags", TagsAsync).WithSummary("标签云。");
     }
@@ -27,6 +28,7 @@ public static class PluginEndpoints
         string? q,
         string? tag,
         int? apiLevel,
+        bool? featured,
         string sort = "updated",
         int page = 1,
         int size = 20)
@@ -50,6 +52,10 @@ public static class PluginEndpoints
             // 宿主只装 apiLevel 不高于自己的插件,检索也按同一口径过滤。
             filter = f.And(filter, f.Lte(p => p.LatestApiLevel, level));
         }
+        if (featured is { } onlyFeatured)
+        {
+            filter = f.And(filter, f.Eq(p => p.IsFeatured, onlyFeatured));
+        }
 
         SortDefinition<Plugin> order = sort switch
         {
@@ -63,27 +69,119 @@ public static class PluginEndpoints
         List<Plugin> items = await db.Plugins.Find(filter).Sort(order)
                                      .Skip((page - 1) * size).Limit(size)
                                      .ToListAsync().ConfigureAwait(false);
+        Dictionary<string, string> signatures = await LatestSignaturesAsync(db, items).ConfigureAwait(false);
         return Results.Ok(new
         {
             total,
             page,
             size,
-            items = items.Select(p => new
-            {
-                p.Id,
-                p.DisplayName,
-                p.Summary,
-                excerpt = MarkdownRenderer.Excerpt(p.DescriptionMarkdown),
-                p.Author,
-                p.Tags,
-                p.LatestVersion,
-                p.LatestApiLevel,
-                p.LatestMinHostVersion,
-                p.Downloads,
-                p.RatingAverage,
-                p.RatingCount,
-                p.UpdatedAt
-            })
+            items = items.Select(p => Summarize(p, signatures))
+        });
+    }
+
+    /// <summary>
+    /// 列表卡片用的投影。卡片上要显示"已验签"这类结论,而签名状态挂在**版本**上,
+    /// 所以走 <see cref="LatestSignaturesAsync" /> 一次批量取回,不在循环里逐个查库。
+    /// </summary>
+    private static object Summarize(Plugin p, IReadOnlyDictionary<string, string> signatures) => new
+    {
+        p.Id,
+        p.DisplayName,
+        p.Summary,
+        excerpt = MarkdownRenderer.Excerpt(p.DescriptionMarkdown),
+        p.Author,
+        p.Tags,
+        p.LatestVersion,
+        p.LatestApiLevel,
+        p.LatestMinHostVersion,
+        latestSignature = p.LatestVersion is not null && signatures.TryGetValue(p.Id, out string? state) ? state : null,
+        p.IsFeatured,
+        p.Downloads,
+        p.RatingAverage,
+        p.RatingCount,
+        p.UpdatedAt
+    };
+
+    /// <summary>
+    /// 批量取回每个插件"最新已发布版本"的签名状态。
+    ///
+    /// 一次 <c>$in</c> 查完这一页的全部版本,再在内存里挑出与 <c>LatestVersion</c> 对得上的那条 ——
+    /// 比在渲染循环里逐个 <c>FirstOrDefault</c> 少几十次往返,也不必为了一个展示字段
+    /// 把签名状态冗余进 <see cref="Plugin" />(那样得在发布、撤回、强制下架三处同时维护)。
+    /// </summary>
+    private static async Task<Dictionary<string, string>> LatestSignaturesAsync(MarketDbContext db, IReadOnlyCollection<Plugin> plugins)
+    {
+        Dictionary<string, string> wanted = plugins.Where(p => p.LatestVersion is not null)
+                                                   .ToDictionary(p => p.Id, p => p.LatestVersion!, StringComparer.Ordinal);
+        if (wanted.Count == 0)
+        {
+            return [];
+        }
+        List<string> ids = [.. wanted.Keys];
+        List<PluginVersion> versions = await db.Versions
+                                               .Find(v => ids.Contains(v.PluginId) && v.Status == PluginVersionStatus.Published)
+                                               .Project(v => new PluginVersion
+                                               {
+                                                   PluginId = v.PluginId,
+                                                   Version = v.Version,
+                                                   SignatureState = v.SignatureState,
+                                                   PayloadSha256 = "",
+                                                   FileSha256 = "",
+                                                   ObjectKey = "",
+                                                   UploadedBySubject = ""
+                                               })
+                                               .ToListAsync().ConfigureAwait(false);
+        return versions
+               .Where(v => wanted.TryGetValue(v.PluginId, out string? version) && string.Equals(version, v.Version, StringComparison.Ordinal))
+               .GroupBy(v => v.PluginId, StringComparer.Ordinal)
+               .ToDictionary(g => g.Key, g => g.First().SignatureState, StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// 相关插件。两路来源,前者优先:**同一作者的其他插件**,以及**标签重合最多的插件**。
+    ///
+    /// 这里刻意不叫"装了它的人也在用" —— 那需要安装/共现数据,而市场只看得到下载,
+    /// 下载量推不出共现关系。把一个凑出来的推荐说成行为数据,是在骗读者。
+    /// </summary>
+    private static async Task<IResult> RelatedAsync(string id, MarketDbContext db, int size = 6)
+    {
+        size = Math.Clamp(size, 1, 20);
+        Plugin? plugin = await db.Plugins.Find(p => p.Id == id).FirstOrDefaultAsync().ConfigureAwait(false);
+        if (plugin is null)
+        {
+            return Results.NotFound();
+        }
+
+        FilterDefinitionBuilder<Plugin> f = Builders<Plugin>.Filter;
+        FilterDefinition<Plugin> listed = f.And(
+            f.Eq(p => p.IsUnlisted, false),
+            f.Ne(p => p.LatestVersion, null),
+            f.Ne(p => p.Id, id));
+
+        List<Plugin> sameOwner = await db.Plugins
+                                         .Find(f.And(listed, f.Eq(p => p.OwnerSubject, plugin.OwnerSubject)))
+                                         .SortByDescending(p => p.Downloads)
+                                         .Limit(size)
+                                         .ToListAsync().ConfigureAwait(false);
+
+        List<Plugin> sameTags = [];
+        if (plugin.Tags.Count > 0 && sameOwner.Count < size)
+        {
+            List<string> seen = [.. sameOwner.Select(p => p.Id), id];
+            sameTags = await db.Plugins
+                               .Find(f.And(listed, f.AnyIn(p => p.Tags, plugin.Tags), f.Nin(p => p.Id, seen)))
+                               .SortByDescending(p => p.RatingAverage)
+                               .ThenByDescending(p => p.Downloads)
+                               .Limit(size - sameOwner.Count)
+                               .ToListAsync().ConfigureAwait(false);
+        }
+
+        List<Plugin> all = [.. sameOwner, .. sameTags];
+        Dictionary<string, string> signatures = await LatestSignaturesAsync(db, all).ConfigureAwait(false);
+        return Results.Ok(new
+        {
+            byAuthor = sameOwner.Select(p => Summarize(p, signatures)),
+            byTags = sameTags.Select(p => Summarize(p, signatures))
         });
     }
 
@@ -109,9 +207,11 @@ public static class PluginEndpoints
             plugin.DescriptionRemovedReason,
             plugin.Author,
             plugin.Publisher,
+            ownerName = plugin.OwnerName,
             plugin.Tags,
             plugin.Homepage,
             plugin.License,
+            plugin.IsFeatured,
             plugin.Downloads,
             plugin.RatingAverage,
             plugin.RatingCount,
@@ -122,17 +222,45 @@ public static class PluginEndpoints
                 v.Version,
                 v.ApiLevel,
                 v.MinHostVersion,
+                v.MinSdkVersion,
                 v.HostMode,
+                v.IdlePolicy,
+                v.Entry,
+                v.ActivationEvents,
+                contributes = v.Contributes is null || v.Contributes.IsEmpty ? null : v.Contributes,
                 v.PackageSize,
                 v.PayloadSha256,
                 v.FileSha256,
                 signature = v.SignatureState,
                 releaseNotesHtml = markdown.ToHtml(v.ReleaseNotesMarkdown),
                 v.PublishedAt,
-                v.Downloads
+                v.Downloads,
+                scan = PublicScan(v.Scan)
             })
         });
     }
+
+    /// <summary>
+    /// 已发布版本的**公开**检测结论。
+    ///
+    /// 这里只给结论与可复现性信息(判定、起止时间、引擎版本、条目数),
+    /// **不下发 findings 原文** —— 那些是给上传者和审核员看的诊断信息,里面会带包内路径
+    /// (如 <c>scripts/post-install.ps1</c>)。对已上架的包来说,公开这些等于把
+    /// "这个包哪里值得注意"整理成一份现成的清单挂在详情页上。
+    /// 想让访客安心的是"过了哪几关",不是"我们在它身上看见了什么"。
+    /// </summary>
+    private static object? PublicScan(ScanReport? scan) =>
+        scan is null
+            ? null
+            : new
+            {
+                verdict = scan.Verdict.ToString(),
+                scan.StartedAt,
+                scan.CompletedAt,
+                scan.Engines,
+                scan.EntryCount,
+                scan.UnpackedBytes
+            };
 
     /// <summary>
     /// 换取下载 URL。**只有 Published 的版本能走到这里** —— 隔离区里的包连预签名都签不出来

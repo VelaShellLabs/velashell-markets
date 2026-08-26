@@ -12,6 +12,10 @@ namespace VelaShell.Market.Api.Endpoints;
 /// <param name="Body">Markdown 正文,可空。</param>
 public sealed record ReviewRequest(int Rating, string? Body);
 
+/// <summary>作者回复请求体。</summary>
+/// <param name="Body">回复正文,Markdown。</param>
+public sealed record ReplyRequest(string? Body);
+
 /// <summary>评价系统。每人每插件一条(数据库唯一索引保证),可改可删。</summary>
 public static class ReviewEndpoints
 {
@@ -24,6 +28,76 @@ public static class ReviewEndpoints
         group.MapGet("/mine", MineAsync).RequireAuthorization().WithSummary("我对该插件的评价(没有则 204)。");
         group.MapPut("/", UpsertAsync).RequireAuthorization().WithSummary("发表或修改我的评价。");
         group.MapDelete("/", DeleteAsync).RequireAuthorization().WithSummary("删除我的评价。");
+        group.MapPut("/{reviewId}/reply", ReplyAsync).RequireAuthorization().WithSummary("插件作者公开回复一条评价。");
+        group.MapDelete("/{reviewId}/reply", DeleteReplyAsync).RequireAuthorization().WithSummary("撤下作者回复。");
+    }
+
+    /// <summary>
+    /// 作者回复。只有插件拥有者能写,而且**回复不会动评价本身** ——
+    /// 作者可以解释、致谢、说"下个版本修",但删不掉别人说过的话。
+    /// 这是作者面对差评时唯一的正当出口;没有它,唯一的出口就是去找审核员要求隐藏。
+    /// </summary>
+    private static async Task<IResult> ReplyAsync(string id, string reviewId, [FromBody] ReplyRequest request,
+        ClaimsPrincipal user, MarketDbContext db, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Body))
+        {
+            return Results.BadRequest(new { error = "回复内容不能为空。" });
+        }
+        if (request.Body.Length > 2000)
+        {
+            return Results.BadRequest(new { error = "回复最多 2000 字符。" });
+        }
+        if (!MongoDB.Bson.ObjectId.TryParse(reviewId, out MongoDB.Bson.ObjectId objectId))
+        {
+            return Results.BadRequest(new { error = "非法的评价 id。" });
+        }
+        IResult? denied = await EnsureOwnerAsync(id, user, db, cancellationToken).ConfigureAwait(false);
+        if (denied is not null)
+        {
+            return denied;
+        }
+        UpdateResult result = await db.Reviews.UpdateOneAsync(
+            r => r.Id == objectId && r.PluginId == id,
+            Builders<Review>.Update
+                            .Set(r => r.AuthorReplyMarkdown, request.Body.Trim())
+                            .Set(r => r.AuthorReplyAt, DateTime.UtcNow),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+        return result.MatchedCount == 0 ? Results.NotFound() : Results.NoContent();
+    }
+
+    private static async Task<IResult> DeleteReplyAsync(string id, string reviewId,
+        ClaimsPrincipal user, MarketDbContext db, CancellationToken cancellationToken)
+    {
+        if (!MongoDB.Bson.ObjectId.TryParse(reviewId, out MongoDB.Bson.ObjectId objectId))
+        {
+            return Results.BadRequest(new { error = "非法的评价 id。" });
+        }
+        IResult? denied = await EnsureOwnerAsync(id, user, db, cancellationToken).ConfigureAwait(false);
+        if (denied is not null)
+        {
+            return denied;
+        }
+        UpdateResult result = await db.Reviews.UpdateOneAsync(
+            r => r.Id == objectId && r.PluginId == id,
+            Builders<Review>.Update
+                            .Set(r => r.AuthorReplyMarkdown, null)
+                            .Set(r => r.AuthorReplyAt, null),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+        return result.MatchedCount == 0 ? Results.NotFound() : Results.NoContent();
+    }
+
+    /// <summary>拥有者校验。返回 null 表示放行,否则就是该直接回给调用方的结果。</summary>
+    private static async Task<IResult?> EnsureOwnerAsync(string pluginId, ClaimsPrincipal user, MarketDbContext db, CancellationToken cancellationToken)
+    {
+        Plugin? plugin = await db.Plugins.Find(p => p.Id == pluginId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        if (plugin is null)
+        {
+            return Results.NotFound();
+        }
+        return string.Equals(plugin.OwnerSubject, user.Subject(), StringComparison.Ordinal)
+                   ? null
+                   : Results.Problem(statusCode: StatusCodes.Status403Forbidden, detail: "只有插件作者能回复评价。");
     }
 
     /// <summary>
@@ -40,7 +114,15 @@ public static class ReviewEndpoints
             : Results.Ok(new { mine.Rating, body = mine.BodyMarkdown, mine.UpdatedAt });
     }
 
-    private static async Task<IResult> ListAsync(string id, MarketDbContext db, MarkdownRenderer markdown, int page = 1, int size = 20)
+    /// <summary>
+    /// 评价列表。
+    ///
+    /// 排序只提供**最新 / 低分优先 / 高分优先**三种,没有"最有帮助" ——
+    /// 那需要一套有用票与防重复投票的存储,现在没有;凭空按点赞数排序等于编一个不存在的信号。
+    /// 「低分优先」是有意留的:想知道一个插件哪里不好用的人,不该被迫翻十页好评。
+    /// </summary>
+    private static async Task<IResult> ListAsync(string id, MarketDbContext db, MarkdownRenderer markdown,
+        string sort = "recent", int page = 1, int size = 20)
     {
         page = Math.Max(1, page);
         size = Math.Clamp(size, 1, 100);
@@ -54,8 +136,14 @@ public static class ReviewEndpoints
                                                      .Group(r => r.Rating, g => new { Rating = g.Key, Count = g.Count() })
                                                      .ToListAsync().ConfigureAwait(false))
             .ToDictionary(g => g.Rating, g => g.Count);
+        SortDefinition<Review> order = sort switch
+        {
+            "lowest" => Builders<Review>.Sort.Ascending(r => r.Rating).Descending(r => r.UpdatedAt),
+            "highest" => Builders<Review>.Sort.Descending(r => r.Rating).Descending(r => r.UpdatedAt),
+            _ => Builders<Review>.Sort.Descending(r => r.UpdatedAt)
+        };
         List<Review> items = await db.Reviews.Find(filter)
-                                     .SortByDescending(r => r.UpdatedAt)
+                                     .Sort(order)
                                      .Skip((page - 1) * size).Limit(size)
                                      .ToListAsync().ConfigureAwait(false);
         return Results.Ok(new
@@ -66,12 +154,18 @@ public static class ReviewEndpoints
             distribution,
             items = items.Select(r => new
             {
+                id = r.Id.ToString(),
                 r.DisplayName,
                 r.Rating,
                 bodyHtml = markdown.ToHtml(r.BodyMarkdown),
                 r.PluginVersion,
                 r.CreatedAt,
-                r.UpdatedAt
+                r.UpdatedAt,
+                // 回复给两份:html 用来展示,原文用来让作者点「编辑」时预填输入框
+                // (它本来就是作者自己写的公开文字,不存在下发原文的顾虑)。
+                authorReplyHtml = r.AuthorReplyMarkdown is null ? null : markdown.ToHtml(r.AuthorReplyMarkdown),
+                authorReply = r.AuthorReplyMarkdown,
+                r.AuthorReplyAt
             })
         });
     }

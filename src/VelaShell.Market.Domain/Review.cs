@@ -37,6 +37,17 @@ public sealed class Review
     /// <summary>最后修改时间(UTC)。</summary>
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// 插件作者的公开回复,Markdown 原文。
+    ///
+    /// 只有插件的拥有者能写,而且**回复不能顶掉评价本身** —— 它挂在评价下面,
+    /// 作者能解释、能致谢、能说"下个版本修",但删不掉别人说过的话。
+    /// </summary>
+    public string? AuthorReplyMarkdown { get; set; }
+
+    /// <summary>作者回复的时间(UTC)。为空表示没回复过。</summary>
+    public DateTime? AuthorReplyAt { get; set; }
+
     /// <summary>是否被管理员隐藏(违规内容),隐藏后不计入均值。</summary>
     public bool IsHidden { get; set; }
 

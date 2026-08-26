@@ -227,8 +227,12 @@ public sealed class PackageReviewWorker(
         {
             update = update.Set(v => v.ApiLevel, manifest.ApiLevel)
                            .Set(v => v.MinHostVersion, manifest.MinHostVersion)
+                           .Set(v => v.MinSdkVersion, manifest.MinSdkVersion)
                            .Set(v => v.HostMode, manifest.HostMode.ToString())
-                           .Set(v => v.Entry, manifest.Entry);
+                           .Set(v => v.IdlePolicy, manifest.IdlePolicy.ToString())
+                           .Set(v => v.Entry, manifest.Entry)
+                           .Set(v => v.ActivationEvents, ManifestProjection.ToActivationEvents(manifest))
+                           .Set(v => v.Contributes, ManifestProjection.ToContributions(manifest));
         }
         if (inspection.Info is { } info)
         {

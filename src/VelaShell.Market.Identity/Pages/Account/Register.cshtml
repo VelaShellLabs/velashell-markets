@@ -4,46 +4,119 @@
     ViewData["Title"] = "注册";
 }
 
+@section Aside {
+    <div class="aside-pitch">
+        <h2>注册一次,之后市场里的一切都通了。</h2>
+        <p>上传插件、给别人的插件打分、被授权后进审核台,都用这一个账号。浏览和搜索从来不需要它。</p>
+        <ul class="aside-points">
+            <li>
+                <span class="mark">@await Html.PartialAsync("_Icon", "at")</span>
+                <span>
+                    <b>邮箱可以留空</b>
+                    <span>邮箱只用来找回口令。不填也能注册,只是口令丢了就只能找管理员重置。</span>
+                </span>
+            </li>
+            <li>
+                <span class="mark">@await Html.PartialAsync("_Icon", "fingerprint")</span>
+                <span>
+                    <b>身份标识就是 sub</b>
+                    <span>注册完成后账户页会显示你的 sub —— 部署方把它填进审核员名单,你才进得了审核台。</span>
+                </span>
+            </li>
+            <li>
+                <span class="mark">@await Html.PartialAsync("_Icon", "smile")</span>
+                <span>
+                    <b>显示名随时能改</b>
+                    <span>别人在插件页和评价里看到的是显示名;用户名只用来登录,注册后不再变。</span>
+                </span>
+            </li>
+        </ul>
+    </div>
+}
+
 <h1>注册</h1>
 <p class="lede">一个账号通吃插件市场的上传、评价与审核。</p>
 
 @if (!Model.AllowRegistration)
 {
-    <p class="notice error">本站已关闭自助注册,请联系管理员开通账号。</p>
+    <p class="notice error">
+        @await Html.PartialAsync("_Icon", "alert")
+        <span>本站已关闭自助注册,请联系管理员开通账号。</span>
+    </p>
 }
 else
 {
     @if (!string.IsNullOrEmpty(Model.Error))
     {
-        <p class="notice error">@Model.Error</p>
+        <p class="notice error">
+            @await Html.PartialAsync("_Icon", "alert")
+            <span>@Model.Error</span>
+        </p>
     }
 
     <form method="post">
         <input type="hidden" asp-for="ReturnUrl" />
+
         <label>
             <span>用户名</span>
-            <input asp-for="Input.UserName" autocomplete="username" autofocus required />
+            <span class="control">
+                @await Html.PartialAsync("_Icon", "user")
+                <input asp-for="Input.UserName" autocomplete="username" autofocus required placeholder="joesdu" />
+            </span>
+            <span class="hint">登录用,注册后不能改</span>
             <span asp-validation-for="Input.UserName" class="field-error"></span>
         </label>
-        <label>
-            <span>显示名(可留空)</span>
-            <input asp-for="Input.DisplayName" autocomplete="nickname" />
-        </label>
-        <label>
-            <span>邮箱(可留空)</span>
-            <input asp-for="Input.Email" type="email" autocomplete="email" />
-            <span asp-validation-for="Input.Email" class="field-error"></span>
-        </label>
+
+        <div class="two-col">
+            <label>
+                <span>显示名</span>
+                <span class="control">
+                    @await Html.PartialAsync("_Icon", "smile")
+                    <input asp-for="Input.DisplayName" autocomplete="nickname" placeholder="可留空" />
+                </span>
+            </label>
+            <label>
+                <span>邮箱</span>
+                <span class="control">
+                    @await Html.PartialAsync("_Icon", "mail")
+                    <input asp-for="Input.Email" type="email" autocomplete="email" placeholder="可留空" />
+                </span>
+                <span asp-validation-for="Input.Email" class="field-error"></span>
+            </label>
+        </div>
+
         <label>
             <span>口令</span>
-            <input asp-for="Input.Password" type="password" autocomplete="new-password" required />
+            <span class="control">
+                @await Html.PartialAsync("_Icon", "lock")
+                <input asp-for="Input.Password" type="password" autocomplete="new-password" required placeholder="••••••••" />
+                <button type="button" class="reveal" data-reveal="@Html.IdFor(m => m.Input.Password)" aria-label="显示口令">
+                    @await Html.PartialAsync("_Icon", "eye")
+                </button>
+            </span>
             <span asp-validation-for="Input.Password" class="field-error"></span>
         </label>
+
+        @*
+            强度条只做长度与字符类别这几条**能自己判断**的规则;真正的口令策略在服务端。
+            它的作用是让人在按下提交之前就看见结论,而不是提交完才被退回来。
+        *@
+        <div class="strength" data-score="0"
+             data-strength-for="@Html.IdFor(m => m.Input.Password)"
+             data-strength-username="@Html.IdFor(m => m.Input.UserName)"></div>
+
         <label>
             <span>再输一次</span>
-            <input asp-for="Input.ConfirmPassword" type="password" autocomplete="new-password" required />
+            <span class="control">
+                @await Html.PartialAsync("_Icon", "key")
+                <input asp-for="Input.ConfirmPassword" type="password" autocomplete="new-password" required placeholder="••••••••" />
+                <button type="button" class="reveal" data-reveal="@Html.IdFor(m => m.Input.ConfirmPassword)" aria-label="显示口令">
+                    @await Html.PartialAsync("_Icon", "eye")
+                </button>
+            </span>
             <span asp-validation-for="Input.ConfirmPassword" class="field-error"></span>
         </label>
+
         <button type="submit">注册并登录</button>
     </form>
 }

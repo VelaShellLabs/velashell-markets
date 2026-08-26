@@ -1,4 +1,4 @@
-import { ThemeProvider, ThemeSwitch, ThemeSync, UserMenu } from '@/components';
+import { Brand, ThemeProvider, ThemeSwitch, ThemeSync, UserMenu } from '@/components';
 import { appName, repositoryUrl, version } from '@/configs';
 import { getProfile } from '@/services/me';
 import { getUser } from '@/utils/auth';
@@ -64,10 +64,25 @@ export const layout: RunTimeLayoutConfig = ({ initialState }) => ({
   actionsRender: () => [<ThemeSwitch key="theme" />, <Button key="repo" type="text" icon={<GithubOutlined />} href={repositoryUrl} target="_blank" aria-label="源码仓库" />, <UserMenu key="user" />],
   footerRender: () => (
     <div className="market-footer">
-      {appName} v{version} · 所有上传的 .vpx 均经隔离检测后才会发布
+      <span>
+        {appName} · web {version}
+      </span>
+      <span style={{ display: 'inline-flex', gap: 18 }}>
+        <a href={`${repositoryUrl}/blob/main/docs/security-pipeline.md`} target="_blank" rel="noreferrer noopener">
+          安全流水线
+        </a>
+        <a href={`${repositoryUrl}#readme`} target="_blank" rel="noreferrer noopener">
+          开发者文档
+        </a>
+        <a href={repositoryUrl} target="_blank" rel="noreferrer noopener">
+          GitHub
+        </a>
+      </span>
     </div>
   ),
-  menuHeaderRender: undefined,
+  // 自己渲染品牌区:ProLayout 默认那套是 <img> + 文本,而这里的帆船图标要跟着主色走,
+  // 外链的 svg 拿不到页面的 CSS 变量,换主题时它不会变。
+  menuHeaderRender: () => <Brand />,
   /**
    * ThemeSync 挂在这里(而不是页面里):它要 setInitialState,必须活在 initialState
    * Provider 内部,而 childrenRender 正好在那一层里,又能跟着路由一直存在。

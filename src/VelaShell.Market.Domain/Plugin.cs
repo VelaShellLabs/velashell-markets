@@ -64,6 +64,17 @@ public sealed class Plugin
     /// <summary>评价条数。</summary>
     public int RatingCount { get; set; }
 
+    /// <summary>
+    /// 是否被审核员选为「编辑推荐」。浏览页首屏用一张双宽卡片展示它。
+    ///
+    /// 刻意做成**人工开关**而不是按下载量自动算:自动榜单只会把已经很火的插件推得更火,
+    /// 而首屏那个位置的价值恰恰在于能把一个没人知道但确实好用的插件顶上去。
+    /// </summary>
+    public bool IsFeatured { get; set; }
+
+    /// <summary>被设为推荐的时间(UTC)。多个推荐时按它取最近的一个。</summary>
+    public DateTime? FeaturedAt { get; set; }
+
     /// <summary>是否被管理员下架(下架后不出现在检索里,已装用户不受影响)。</summary>
     public bool IsUnlisted { get; set; }
 
@@ -141,6 +152,21 @@ public sealed class PluginVersion
 
     /// <summary>入口程序集相对路径。</summary>
     public string Entry { get; set; } = "";
+
+    /// <summary>清单里的 minSdkVersion(可空)。</summary>
+    public string? MinSdkVersion { get; set; }
+
+    /// <summary>空闲回收策略:KeepAlive / Recyclable(仅隔离模式有意义)。</summary>
+    public string IdlePolicy { get; set; } = "KeepAlive";
+
+    /// <summary>激活事件(<c>onCommand:*</c> / <c>onProtocol:*</c> …),原样取自清单。</summary>
+    public List<string> ActivationEvents { get; set; } = [];
+
+    /// <summary>
+    /// 声明式贡献点快照。详情页用它回答"装上之后宿主里会多出什么"——
+    /// 这些都是发现期静态可知的东西,不必装载程序集。
+    /// </summary>
+    public PluginContributionSummary? Contributes { get; set; }
 
     /// <summary>版本说明,Markdown 原文。</summary>
     public string ReleaseNotesMarkdown { get; set; } = "";

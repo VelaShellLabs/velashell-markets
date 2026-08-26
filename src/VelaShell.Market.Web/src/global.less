@@ -1,64 +1,97 @@
-/* 全站样式。只放三类东西:页面容器、市场特有的卡片/评价/报告样式、Markdown 正文排版。
-   组件级观感一律交给 antd 的主题令牌(见 src/utils/theme.ts 的 themeTokens),
-   在这里覆盖组件样式会让主题切换失效。
+/* 全站样式。只放三类东西:页面骨架与自定义区块、Markdown 正文排版、以及少量对
+   ProLayout 的结构性覆盖。组件级观感一律交给 antd 的主题令牌(见 src/utils/theme.ts),
+   在这里覆盖组件内部样式会让主题切换失效。
 
    深浅色:这批自定义类不是 antd 组件,拿不到主题令牌,所以颜色一律走下面这组
    CSS 变量,由 <html data-theme> 切换(见 src/components/ThemeProvider)。
-   **新增样式时不要再写死颜色** —— 写死一个,深色模式下就多一处白底白字。 */
+   **新增样式时不要再写死颜色** —— 写死一个,深色模式下就多一处白底白字。
+
+   变量名与 themeTokens 里的取值**逐项对齐**,两边改要一起改。 */
 
 :root {
   /* 顶栏与页面内容共用同一个左右内边距,两者的左右边缘才对得齐。 */
   --market-page-pad: 32px;
+  --market-mono: 'JetBrains Mono', 'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
 
   /* ---- 浅色(默认) ---- */
-  --market-header-bg: #ffffff;
-  --market-text: #344054; /* 正文 */
-  --market-text-strong: #101828; /* 标题、卡片名 */
-  --market-text-muted: #667085; /* 摘要、次要说明 */
-  --market-text-faint: #98a2b3; /* 作者、计数、页脚 */
-  --market-border: #eaecf0; /* 表格线、虚线分隔 */
-  --market-border-soft: #f2f4f7; /* 卡片底部细线 */
-  --market-card-border: #eceef3;
-  --market-card-hover-border: #c7d2fe;
-  --market-card-hover-shadow: rgba(79, 70, 229, 0.12);
-  --market-fill: #f2f4f7; /* 行内代码底、分布条轨道 */
-  --market-fill-subtle: #f9fafb; /* 表头底 */
-  --market-quote-border: #d0d5dd;
-  --market-link: #4f46e5;
-  --market-star: #faad14; /* 有评分时的星色,深浅色下都够亮,不随主题变 */
-  --market-star-empty: #d0d5dd; /* 没人评过时的灰星 */
+  --canvas: #f5f6f8;
+  --surface: #ffffff;
+  --surface-alt: #eff1f4;
+  --hairline: #e4e7ec;
+  --hairline-soft: #eff1f4;
+  --ink: #0f1419; /* 标题、卡片名 */
+  --ink-2: #5a6474; /* 正文、次要说明 */
+  --ink-3: #8c96a6; /* 作者、计数、页脚 */
+  --accent: #4f46e5;
+  --accent-soft: #edecfd;
+  --accent-ink: #4338ca;
+  --on-accent: #ffffff;
+  --ok: #0e9f6e;
+  --ok-soft: #e6f6ef;
+  --warn: #c2740a;
+  --warn-soft: #fdf3e3;
+  --danger: #d92d20;
+  --danger-soft: #fdecea;
+  --star: #f0a020;
+
+  /* 首屏深色带与认证页左栏共用一组值:两种主题下它都是深的,不跟着翻。 */
+  --hero-bg: #14161c;
+  --hero-ink: #ffffff;
+  --hero-ink-2: #9aa3b2;
+  --hero-faint: #6b7482;
+  /* 深底上的绿必须提亮,#0e9f6e 压在 #14161c 上几乎看不出是绿的。 */
+  --ok-on-dark: #34d399;
+
+  --card-hover-border: #c7d2fe;
+  --card-hover-shadow: rgba(79, 70, 229, 0.1);
+  --code-bg: #1e1e2e;
+  --code-ink: #e6e6f0;
+  --code-comment: #7e8299;
 }
 
 /* ---- 深色 ----
    不用纯黑:大面积 #000 配白字对比过强,长时间看很累。这组值贴着 antd 暗色算法
    的中性色走,自定义区块与 antd 组件放在一起才不会像两张皮。 */
 :root[data-theme='dark'] {
-  --market-header-bg: #1c1c21;
-  --market-text: rgba(255, 255, 255, 0.82);
-  --market-text-strong: rgba(255, 255, 255, 0.92);
-  --market-text-muted: rgba(255, 255, 255, 0.55);
-  --market-text-faint: rgba(255, 255, 255, 0.38);
-  --market-border: #303036;
-  --market-border-soft: #2a2a30;
-  --market-card-border: #303036;
-  --market-card-hover-border: #4d47a3;
-  --market-card-hover-shadow: rgba(0, 0, 0, 0.45);
-  --market-fill: rgba(255, 255, 255, 0.08);
-  --market-fill-subtle: rgba(255, 255, 255, 0.04);
-  --market-quote-border: #3f3f46;
-  --market-link: #8b83f0;
-  --market-star-empty: rgba(255, 255, 255, 0.22);
+  --canvas: #0e1014;
+  --surface: #16181d;
+  --surface-alt: #1c1f26;
+  --hairline: #272b33;
+  --hairline-soft: #202429;
+  --ink: #eaedf2;
+  --ink-2: #98a2b3;
+  --ink-3: #6a7383;
+  --accent: #7c74f2;
+  --accent-soft: #241f52;
+  --accent-ink: #b7b1fa;
+  --ok: #34d399;
+  --ok-soft: #0f2a20;
+  --warn: #f5b547;
+  --warn-soft: #2e2210;
+  --danger: #f97066;
+  --danger-soft: #2e1614;
+
+  --hero-bg: #08090c;
+  --hero-ink-2: #8b94a3;
+  --hero-faint: #5d6675;
+
+  --card-hover-border: #4d47a3;
+  --card-hover-shadow: rgba(0, 0, 0, 0.45);
 }
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ---- 页面容器 ------------------------------------------------------------ */
+.mono {
+  font-family: var(--market-mono);
+  font-variant-ligatures: none;
+}
+
+/* ---- 布局骨架 ------------------------------------------------------------ */
 
 /* 真正给内容设上限的是 GridContent 的 .ant-pro-grid-content.wide(定宽 1200px 居中),
    不是 .ant-pro-layout-content —— 只覆盖后者不起作用,宽屏上整页仍然挤在中间一条。
@@ -72,6 +105,10 @@ body {
   padding: 0;
 }
 
+.ant-pro-layout .ant-pro-layout-bg-list {
+  display: none;
+}
+
 /* 顶栏内容与页面用同一个左右内边距 —— 品牌 logo 的左边缘和卡片的左边缘因此对齐。 */
 .ant-pro-top-nav-header-main {
   max-width: none;
@@ -79,15 +116,122 @@ body {
   padding-inline: var(--market-page-pad);
 }
 
-/* defaultSettings 里的 colorBgHeader 已经是 var(--market-header-bg),正常情况下够了。
-   这条是兜底:ProLayout 换了版本、token 名字变了的话,顶栏不至于在深色页面上留一条白带。 */
-:root[data-theme='dark'] .ant-pro-layout .ant-pro-top-nav-header,
-:root[data-theme='dark'] .ant-pro-layout .ant-pro-global-header {
-  background: var(--market-header-bg);
+.ant-pro-layout .ant-pro-top-nav-header,
+.ant-pro-layout .ant-pro-global-header {
+  background: var(--surface);
+  border-block-end: 1px solid var(--hairline);
+  box-shadow: none;
 }
 
+/* 顶栏品牌区:小帆船图标 + 字标 + 一条竖线 + "插件市场"。 */
+.ant-pro-top-nav-header-logo {
+  min-width: auto;
+}
+
+.market-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  white-space: nowrap;
+}
+
+.market-brand-mark {
+  color: var(--accent);
+  font-size: 21px;
+  display: inline-flex;
+}
+
+.market-brand-name {
+  font-size: 16.5px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: var(--ink);
+}
+
+.market-brand-divider {
+  width: 1px;
+  height: 14px;
+  background: var(--hairline);
+}
+
+.market-brand-sub {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+/* 顶栏导航做成药丸而不是下划线:当前页在深浅两种主题下都要一眼可辨,
+   而 ProLayout 默认那条下划线在深色顶栏上几乎看不见。 */
+.ant-pro-top-nav-header .ant-menu-horizontal {
+  border-bottom: none;
+  background: transparent;
+  line-height: 60px;
+}
+
+.ant-pro-top-nav-header .ant-menu-horizontal > .ant-menu-item,
+.ant-pro-top-nav-header .ant-menu-horizontal > .ant-menu-submenu {
+  padding-inline: 12px;
+  margin-inline: 2px;
+  border-radius: 8px;
+  height: 34px;
+  line-height: 34px;
+  align-self: center;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.ant-pro-top-nav-header .ant-menu-horizontal > .ant-menu-item::after,
+.ant-pro-top-nav-header .ant-menu-horizontal > .ant-menu-submenu::after {
+  display: none !important;
+}
+
+.ant-pro-top-nav-header .ant-menu-horizontal > .ant-menu-item-selected {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+/* 顶栏右侧的用户入口。 */
+.market-user-entry {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 11px 5px 5px;
+  border-radius: 999px;
+  background: var(--surface-alt);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.market-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  color: var(--ink-3);
+  background: transparent;
+  font-size: 12.5px;
+  padding: 22px var(--market-page-pad) 26px;
+  border-top: 1px solid var(--hairline);
+}
+
+.market-footer a {
+  color: var(--ink-3);
+}
+
+.market-footer a:hover {
+  color: var(--accent-ink);
+}
+
+/* 普通页面的外壳。浏览页不用它 —— 那一页的深色带要铺满整幅宽度。 */
 .market-page {
   padding: 28px var(--market-page-pad) 56px;
+}
+
+.market-shell {
+  padding-bottom: 40px;
 }
 
 /* PageShell 的标题区:左边标题+说明,右边动作按钮,窄屏自动换行。 */
@@ -97,15 +241,21 @@ body {
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  margin-bottom: 20px;
+  margin-bottom: 22px;
 }
 
-/* 顶栏右侧的用户入口。 */
-.market-user-entry {
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+.market-page-title {
+  margin: 0 0 5px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--ink);
+}
+
+.market-page-desc {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ink-2);
 }
 
 /* 整页居中的过渡态(登录回调等)。 */
@@ -114,86 +264,318 @@ body {
   text-align: center;
 }
 
-/* 渐变色块在深浅色下都成立,不随主题变 —— 它本来就是一块自带背景的彩色区域。 */
+/* ---- 浏览页:深色首屏 ------------------------------------------------------ */
+
 .market-hero {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #9333ea 100%);
-  border-radius: 14px;
-  padding: 38px 32px;
-  color: #fff;
-  margin-bottom: 24px;
+  background: var(--hero-bg);
+  color: var(--hero-ink);
+  padding: 42px var(--market-page-pad) 40px;
+}
+
+.market-hero-inner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+.market-hero-left {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  min-width: 0;
+}
+
+.market-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--hero-ink-2);
+}
+
+.market-hero-badge .anticon {
+  color: var(--ok-on-dark);
 }
 
 .market-hero h1 {
-  margin: 0 0 6px;
-  font-size: 26px;
-  font-weight: 650;
-  color: #fff;
-}
-
-.market-hero p {
-  margin: 0 0 18px;
-  opacity: 0.86;
-}
-
-.market-footer {
-  text-align: center;
-  color: var(--market-text-faint);
-  background: transparent;
-  font-size: 13px;
-  padding: 16px 0;
-}
-
-/* 侧栏里的要点清单(发布页的"会被拒收/会转人工")。 */
-.market-tips {
-  padding-left: 18px;
   margin: 0;
-  color: var(--market-text-muted);
-  line-height: 2;
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--hero-ink);
 }
 
-/* 校验和:整串很长,必须能断行,否则会把右栏撑出横向滚动条。 */
-.market-hash {
+.market-hero-lede {
+  margin: 0;
+  max-width: 600px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--hero-ink-2);
+}
+
+/* 搜索框在深底上:半透明底 + 一道细边,比纯白输入框更贴这块深色带。 */
+.market-hero-search {
+  max-width: 600px;
+}
+
+.market-hero-search .ant-input-affix-wrapper,
+.market-hero-search .ant-input {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.19);
+  color: var(--hero-ink);
+}
+
+.market-hero-search .ant-input::placeholder {
+  color: var(--hero-faint);
+}
+
+.market-hero-search .ant-input-affix-wrapper:hover,
+.market-hero-search .ant-input-affix-wrapper-focused {
+  border-color: rgba(255, 255, 255, 0.34);
+}
+
+.market-hero-search .anticon {
+  color: var(--hero-ink-2);
+}
+
+.market-hero-hot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: var(--hero-faint);
+}
+
+.market-hero-hot button {
+  border: 0;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--hero-ink-2);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.market-hero-hot button:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--hero-ink);
+}
+
+.market-hero-stats {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+}
+
+.market-hero-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.market-hero-stat b {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.6px;
+  line-height: 1.15;
+  color: var(--hero-ink);
+}
+
+.market-hero-stat span {
+  font-size: 12px;
+  color: var(--hero-ink-2);
+}
+
+.market-hero-stat-rule {
+  width: 1px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ---- 安全流水线细带 -------------------------------------------------------- */
+
+.pipeline-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 13px var(--market-page-pad);
+  background: var(--surface);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.pipeline-steps {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pipeline-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.pipeline-dot {
+  width: 19px;
+  height: 19px;
+  border-radius: 999px;
+  background: var(--ok-soft);
+  color: var(--ok);
+  display: grid;
+  place-items: center;
   font-size: 11px;
-  word-break: break-all;
-  margin-bottom: 8px;
 }
 
-.market-hash-last {
-  margin-bottom: 0;
+.pipeline-arrow {
+  color: var(--ink-3);
+  font-size: 12px;
 }
 
-.market-star {
-  color: var(--market-star);
+.pipeline-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--ink-3);
 }
 
-.market-star-empty {
-  color: var(--market-star-empty);
+/* ---- 浏览页:筛选条与网格 --------------------------------------------------- */
+
+.market-body {
+  padding: 0 var(--market-page-pad);
 }
 
-/* ---- 插件卡片 ------------------------------------------------------------ */
+.market-filters {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 20px 0 18px;
+}
+
+.market-tagbar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.tag-chip:hover {
+  border-color: var(--card-hover-border);
+  color: var(--ink);
+}
+
+.tag-chip em {
+  font-style: normal;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.tag-chip-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.tag-chip-active em {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.tag-chip-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--accent-ink);
+}
+
+.market-sort {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.market-count {
+  font-size: 13px;
+  color: var(--ink-3);
+}
 
 /* 用 grid 而不是 24 栅格:栅格按比例分宽度,列表里只有一两个插件时卡片会被压到
    一两百像素、标题直接挤没。auto-fill + minmax 给了卡片一个下限,
    宽屏自动多排几列,窄屏自动掉到一列,不需要为每个断点写一遍 span。 */
 .plugin-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(288px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
+  align-items: start;
+}
+
+/* 精选卡片横跨两列。窄到只剩一列时它自然退回一列宽,不需要额外的媒体查询。 */
+.plugin-grid-featured {
+  grid-column: span 2;
+}
+
+@media (max-width: 719px) {
+  .plugin-grid-featured {
+    grid-column: span 1;
+  }
 }
 
 .plugin-card {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
   height: 100%;
-  border-color: var(--market-card-border);
+  padding: 18px;
+  border-radius: 13px;
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  cursor: pointer;
   transition:
-    transform 0.15s ease,
+    border-color 0.15s ease,
     box-shadow 0.15s ease,
-    border-color 0.15s ease;
+    transform 0.15s ease;
 }
 
 .plugin-card:hover {
   transform: translateY(-2px);
-  border-color: var(--market-card-hover-border);
-  box-shadow: 0 10px 28px var(--market-card-hover-shadow);
+  border-color: var(--card-hover-border);
+  box-shadow: 0 10px 28px var(--card-hover-shadow);
 }
 
 .plugin-card-head {
@@ -206,7 +588,6 @@ body {
 /* 插件没有图标资源,用 id 稳定映射到一组渐变色块 —— 同一插件每次都长一个样,
    比整墙灰色首字母更容易在列表里认出来。 */
 .plugin-icon {
-  border-radius: 11px;
   color: #fff;
   font-weight: 700;
   display: grid;
@@ -218,6 +599,9 @@ body {
 .plugin-card-headtext {
   min-width: 0;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
 /* 名字独占一行。之前它和版本标签挤在同一个 flex 行里,窄卡片下标签不收缩、
@@ -225,9 +609,9 @@ body {
 .plugin-card-name {
   display: block;
   font-weight: 600;
-  font-size: 16px;
+  font-size: 15.5px;
   line-height: 1.4;
-  color: var(--market-text-strong);
+  color: var(--ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -236,49 +620,52 @@ body {
 .plugin-card-sub {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   min-width: 0;
-  margin-top: 3px;
+  font-size: 12px;
 }
 
-.plugin-card-sub .ant-tag {
+.plugin-card-version {
+  font-family: var(--market-mono);
+  font-size: 11.5px;
+  color: var(--accent-ink);
   flex-shrink: 0;
-  margin-inline-end: 0;
 }
 
 .plugin-card-author {
   flex: 1;
   min-width: 0;
-  color: var(--market-text-faint);
-  font-size: 12px;
+  color: var(--ink-3);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .plugin-card-summary {
-  color: var(--market-text-muted);
-  font-size: 13px;
-  line-height: 1.6;
-  margin: 14px 0 12px;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  line-height: 1.65;
+  margin: 0;
   /* 固定两行:卡片高度不齐会让整个网格看起来很脏。 */
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  min-height: 42px;
+  min-height: 41px;
 }
 
 .plugin-card-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  min-height: 24px;
-  margin-bottom: 12px;
+  min-height: 22px;
 }
 
-.plugin-card-tags .ant-tag {
-  margin-inline-end: 0;
+.plugin-card-rule {
+  height: 1px;
+  background: var(--hairline);
+  margin-top: auto;
 }
 
 /* 底部元信息与正文用一条细线隔开,评分/下载量对齐到同一行的两端。 */
@@ -287,38 +674,482 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding-top: 10px;
-  border-top: 1px solid var(--market-border-soft);
+}
+
+.plugin-card-stats {
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 
 .plugin-card-meta {
-  color: var(--market-text-faint);
+  color: var(--ink-2);
   font-size: 12px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
 }
 
-/* ---- 评价区 -------------------------------------------------------------- */
+.plugin-card-meta .anticon {
+  color: var(--ink-3);
+}
 
-/* 应用商店式评分汇总:左边大均分,右边 5→1 星分布条。 */
+.plugin-card-meta-star .anticon {
+  color: var(--star);
+}
+
+/* ---- 精选卡片 -------------------------------------------------------------- */
+
+.featured-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  height: 100%;
+  padding: 22px;
+  border-radius: 13px;
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.featured-card:hover {
+  border-color: var(--card-hover-border);
+  box-shadow: 0 10px 28px var(--card-hover-shadow);
+}
+
+.featured-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.featured-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.featured-title h3 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.featured-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.featured-summary {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--ink-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.featured-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  align-self: stretch;
+  flex-shrink: 0;
+}
+
+.featured-side-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+/* ---- 芯片(状态/结论/签名,全站统一) --------------------------------------- */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.chip-neutral {
+  background: var(--surface-alt);
+  color: var(--ink-2);
+}
+
+.chip-ok {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.chip-warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.chip-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.chip-accent {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.chip-plain {
+  background: transparent;
+  padding-inline: 0;
+}
+
+/* ---- 详情页 ---------------------------------------------------------------- */
+
+.detail-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 18px var(--market-page-pad) 0;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.detail-crumbs a {
+  color: var(--ink-3);
+}
+
+.detail-crumbs a:hover {
+  color: var(--accent-ink);
+}
+
+.detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 18px var(--market-page-pad) 22px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.detail-head-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  min-width: 0;
+}
+
+.detail-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+}
+
+.detail-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.detail-title-row h1 {
+  margin: 0;
+  font-size: 27px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  color: var(--ink);
+}
+
+.detail-version-pill {
+  padding: 4px 9px;
+  border-radius: 7px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-family: var(--market-mono);
+  font-size: 12.5px;
+}
+
+.detail-summary {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+.detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.detail-head-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.detail-install-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 11px;
+  border-radius: 8px;
+  background: var(--surface-alt);
+  font-size: 11.5px;
+  color: var(--ink-2);
+  max-width: 420px;
+}
+
+.detail-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 32px;
+  padding: 24px var(--market-page-pad) 40px;
+}
+
+.detail-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.detail-rail {
+  width: 372px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 1180px) {
+  .detail-body {
+    flex-direction: column;
+  }
+
+  .detail-rail {
+    width: 100%;
+  }
+}
+
+/* 右栏不用卡片套卡片:发丝线分区,层级靠留白与字重。 */
+.rail-section + .rail-section {
+  border-top: 1px solid var(--hairline);
+  margin-top: 18px;
+  padding-top: 18px;
+}
+
+.rail-title {
+  margin: 0 0 13px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.7px;
+  color: var(--ink-3);
+}
+
+.rail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  font-size: 12.5px;
+}
+
+.rail-row dt {
+  margin: 0;
+  color: var(--ink-3);
+  flex-shrink: 0;
+}
+
+.rail-row dd {
+  margin: 0;
+  color: var(--ink);
+  text-align: right;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.rail-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 5px 0;
+}
+
+.rail-check-mark {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+  font-size: 11px;
+}
+
+.rail-check b {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.rail-check span {
+  display: block;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  line-height: 1.55;
+}
+
+.rail-note {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--ink-3);
+}
+
+/* 校验和:整串很长,必须能断行,否则会把右栏撑出横向滚动条。 */
+.rail-hash {
+  margin-top: 12px;
+}
+
+.rail-hash-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  margin-bottom: 4px;
+}
+
+.rail-hash code {
+  display: block;
+  font-family: var(--market-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  word-break: break-all;
+}
+
+.rail-related {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 7px 0;
+  cursor: pointer;
+}
+
+.rail-related-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.rail-related-text b {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-related-text span {
+  display: block;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 贡献点清单:装上之后宿主里会多出什么。 */
+.contributes-box {
+  border: 1px solid var(--hairline);
+  border-radius: 11px;
+  padding: 16px 18px;
+  margin-top: 20px;
+}
+
+.contributes-box h4 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.contributes-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 0;
+  font-size: 12.5px;
+  flex-wrap: wrap;
+}
+
+.contributes-row b {
+  font-weight: 500;
+  color: var(--ink);
+  font-family: var(--market-mono);
+  font-size: 12px;
+}
+
+.contributes-row span {
+  color: var(--ink-3);
+}
+
+/* ---- 评价区 ---------------------------------------------------------------- */
+
 .review-summary {
   display: flex;
-  gap: 32px;
   align-items: center;
+  gap: 40px;
   flex-wrap: wrap;
+  padding: 22px;
+  border: 1px solid var(--hairline);
+  border-radius: 13px;
+  background: var(--surface);
 }
 
 .review-summary-score {
   text-align: center;
-  min-width: 96px;
+  min-width: 140px;
 }
 
 .review-summary-score-value {
-  font-size: 40px;
-  font-weight: 650;
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: -1.5px;
   line-height: 1.1;
-  color: var(--market-text-strong);
+  color: var(--ink);
+}
+
+.review-summary-rule {
+  width: 1px;
+  align-self: stretch;
+  background: var(--hairline);
 }
 
 .review-summary-bars {
@@ -326,62 +1157,568 @@ body {
   min-width: 220px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .review-bar-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 12px;
-  color: var(--market-text-muted);
+  color: var(--ink-3);
+}
+
+.review-bar-label {
+  width: 30px;
+  flex-shrink: 0;
 }
 
 .review-bar-track {
   flex: 1;
   height: 8px;
   border-radius: 4px;
-  background: var(--market-fill);
+  background: var(--surface-alt);
   overflow: hidden;
 }
 
 .review-bar-fill {
   height: 100%;
   border-radius: 4px;
-  background: var(--market-star);
+  background: var(--star);
 }
 
 .review-bar-count {
-  min-width: 28px;
+  min-width: 32px;
   text-align: right;
-  color: var(--market-text-faint);
+}
+
+.review-compose {
+  border: 1px solid var(--accent);
+  border-radius: 13px;
+  padding: 20px;
+  background: var(--surface);
+}
+
+.review-compose-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.review-compose-head h4 {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.review-item {
+  padding: 18px 0;
+  border-bottom: 1px solid var(--hairline-soft);
+}
+
+.review-item:last-child {
+  border-bottom: 0;
+}
+
+.review-item-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.review-item-who {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.review-item-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.review-item-when {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--ink-3);
+  font-family: var(--market-mono);
 }
 
 /* 我自己那条评价:渲染成普通评价的样子放在最上面,而不是塞回输入框。 */
-.my-review-body {
-  color: var(--market-text);
-  line-height: 1.7;
-  white-space: pre-wrap;
-  word-break: break-word;
-  margin: 8px 0 0;
+.review-body {
+  color: var(--ink-2);
+  line-height: 1.8;
+  font-size: 13px;
+  margin: 10px 0 0;
 }
 
-/* ---- Markdown 正文 -------------------------------------------------------
+.review-reply {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 14px;
+  margin-top: 11px;
+  border-radius: 10px;
+  background: var(--surface-alt);
+}
+
+.review-reply-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+/* ---- 发布页 ---------------------------------------------------------------- */
+
+.upload-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 28px;
+}
+
+.upload-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 24px;
+  border: 1px solid var(--hairline);
+  border-radius: 13px;
+  background: var(--surface);
+}
+
+.upload-rail {
+  width: 420px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 1180px) {
+  .upload-body {
+    flex-direction: column;
+  }
+
+  .upload-rail {
+    width: 100%;
+  }
+}
+
+/* 已选包:把 plugin.json 里那几个决定"这次认领的是谁"的字段摊开。 */
+.upload-picked {
+  border-radius: 11px;
+  background: var(--accent-soft);
+  padding: 18px;
+}
+
+.upload-picked-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.upload-picked-file {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.upload-picked-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--accent-ink);
+  display: grid;
+  place-items: center;
+  font-size: 19px;
+  flex-shrink: 0;
+}
+
+.upload-picked-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--market-mono);
+  font-size: 13.5px;
+  color: var(--ink);
+  flex-wrap: wrap;
+}
+
+.upload-picked-sub {
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.upload-manifest {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+}
+
+.upload-manifest-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.upload-manifest-item span {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.upload-manifest-item b {
+  font-family: var(--market-mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.upload-field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 7px;
+}
+
+.upload-field-head label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.upload-field-head span {
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.upload-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--hairline);
+  padding-top: 20px;
+}
+
+.rule-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--ink-2);
+}
+
+.rule-mark {
+  width: 19px;
+  height: 19px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+  font-size: 11px;
+}
+
+/* ---- 我的上传:汇总条 ------------------------------------------------------- */
+
+.upload-summary {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-wrap: wrap;
+  padding: 18px 24px;
+  border: 1px solid var(--hairline);
+  border-radius: 13px;
+  background: var(--surface);
+  margin-bottom: 22px;
+}
+
+.upload-summary-cell {
+  flex: 1;
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.upload-summary-cell b {
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--ink);
+}
+
+.upload-summary-cell span {
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.upload-summary-rule {
+  width: 1px;
+  height: 44px;
+  background: var(--hairline);
+  margin: 0 24px;
+}
+
+/* ---- 审核台:左队列右详情 --------------------------------------------------- */
+
+.mod-split {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.mod-queue {
+  width: 400px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mod-detail {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--hairline);
+  border-radius: 13px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+@media (max-width: 1180px) {
+  .mod-split {
+    flex-direction: column;
+  }
+
+  .mod-queue {
+    width: 100%;
+  }
+}
+
+.mod-queue-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.mod-queue-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 11px;
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.mod-queue-card:hover {
+  border-color: var(--card-hover-border);
+}
+
+.mod-queue-card-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.mod-queue-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  display: grid;
+  place-items: center;
+  color: var(--ink-2);
+  flex-shrink: 0;
+}
+
+.mod-queue-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.mod-queue-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mod-queue-title b {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mod-queue-title code {
+  font-family: var(--market-mono);
+  font-size: 11.5px;
+  color: var(--ink-3);
+  flex-shrink: 0;
+}
+
+.mod-queue-sub {
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.mod-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 20px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.mod-detail-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.mod-detail-title h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.mod-detail-version {
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--surface-alt);
+  font-family: var(--market-mono);
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.mod-detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin-top: 7px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.mod-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+}
+
+.mod-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--ink-3);
+}
+
+.mod-entries {
+  border-radius: 9px;
+  background: var(--surface-alt);
+  padding: 10px 14px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.mod-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  font-family: var(--market-mono);
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+
+.mod-entry-flag {
+  color: var(--warn);
+}
+
+.mod-entry-blocked {
+  color: var(--danger);
+}
+
+.mod-decision-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* ---- Markdown 正文 ---------------------------------------------------------
    服务端已用 Markdig 关掉 HTML 直通并清洗过 scheme 与内联事件,这里只管排版。 */
 
 .markdown-body {
-  color: var(--market-text);
-  line-height: 1.75;
-  font-size: 14px;
+  color: var(--ink-2);
+  line-height: 1.85;
+  font-size: 13.5px;
   word-wrap: break-word;
 }
 
 .markdown-body h1,
 .markdown-body h2,
 .markdown-body h3 {
-  color: var(--market-text-strong);
-  margin: 22px 0 10px;
-  line-height: 1.35;
+  color: var(--ink);
+  margin: 24px 0 10px;
+  line-height: 1.4;
 }
 
 .markdown-body h1 {
@@ -404,8 +1741,18 @@ body {
   margin: 0 0 12px;
 }
 
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 22px;
+  margin: 0 0 12px;
+}
+
+.markdown-body li {
+  margin-bottom: 4px;
+}
+
 .markdown-body a {
-  color: var(--market-link);
+  color: var(--accent-ink);
   text-decoration: none;
 }
 
@@ -414,20 +1761,22 @@ body {
 }
 
 .markdown-body code {
-  background: var(--market-fill);
+  background: var(--surface-alt);
   border-radius: 4px;
   padding: 1px 5px;
   font-size: 12.5px;
-  font-family: 'Cascadia Code', Consolas, monospace;
+  font-family: var(--market-mono);
 }
 
 /* 代码块本来就是深色的,两种主题下都保持原样 —— 代码高亮的配色不该跟着页面翻转。 */
 .markdown-body pre {
-  background: #1e1e2e;
-  color: #e6e6f0;
-  border-radius: 8px;
-  padding: 14px 16px;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  border-radius: 9px;
+  padding: 15px 17px;
   overflow-x: auto;
+  font-size: 12.5px;
+  line-height: 1.7;
 }
 
 .markdown-body pre code {
@@ -439,8 +1788,8 @@ body {
 .markdown-body blockquote {
   margin: 0 0 12px;
   padding: 2px 14px;
-  border-left: 3px solid var(--market-quote-border);
-  color: var(--market-text-muted);
+  border-left: 3px solid var(--hairline);
+  color: var(--ink-3);
 }
 
 .markdown-body table {
@@ -454,28 +1803,28 @@ body {
 
 .markdown-body th,
 .markdown-body td {
-  border: 1px solid var(--market-border);
+  border: 1px solid var(--hairline);
   padding: 7px 10px;
   text-align: left;
 }
 
 .markdown-body th {
-  background: var(--market-fill-subtle);
+  background: var(--surface-alt);
 }
 
 .markdown-body img {
   max-width: 100%;
 }
 
-/* ---- 检测报告 ------------------------------------------------------------ */
+/* ---- 检测报告 -------------------------------------------------------------- */
 
 .finding-row {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: flex-start;
-  padding: 7px 0;
-  border-bottom: 1px dashed var(--market-border);
-  font-size: 13px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 12.5px;
 }
 
 .finding-row:last-child {
@@ -484,30 +1833,82 @@ body {
 
 /* 定宽:三种级别的标签长度不一,不定宽的话右边的正文会参差不齐。 */
 .finding-severity {
-  min-width: 58px;
+  min-width: 56px;
   text-align: center;
+  padding: 3px 0;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
 }
 
 .finding-code {
-  font-family: 'Cascadia Code', Consolas, monospace;
-  font-size: 12px;
-  color: var(--market-text-muted);
+  font-family: var(--market-mono);
+  font-size: 11.5px;
+  color: var(--ink-3);
   white-space: nowrap;
+  min-width: 84px;
+  flex-shrink: 0;
+}
+
+.finding-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink-2);
+  line-height: 1.6;
 }
 
 .finding-path {
-  color: var(--market-text-faint);
-  font-size: 12px;
+  display: block;
+  margin-top: 4px;
+  font-family: var(--market-mono);
+  color: var(--ink-3);
+  font-size: 11px;
+  word-break: break-all;
 }
 
-/* ---- 窄屏 ---------------------------------------------------------------- */
+/* ---- 侧栏要点清单(发布页等) ----------------------------------------------- */
+
+.market-tips {
+  padding-left: 18px;
+  margin: 0;
+  color: var(--ink-2);
+  line-height: 2;
+}
+
+.market-hash {
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.market-star {
+  color: var(--star);
+}
+
+.market-star-empty {
+  color: var(--ink-3);
+}
+
+/* ---- 窄屏 ------------------------------------------------------------------ */
 
 @media (max-width: 768px) {
   :root {
     --market-page-pad: 16px;
   }
 
-  .market-hero {
-    padding: 28px 20px;
+  .market-hero h1 {
+    font-size: 26px;
+  }
+
+  .market-hero-stats {
+    gap: 18px;
+  }
+
+  .detail-title-row h1 {
+    font-size: 22px;
+  }
+
+  .upload-summary-rule {
+    display: none;
   }
 }

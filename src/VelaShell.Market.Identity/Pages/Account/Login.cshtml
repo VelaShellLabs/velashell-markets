@@ -2,32 +2,93 @@
 @model LoginModel
 @{
     ViewData["Title"] = "登录";
+    // ReturnUrl 非空说明人是从别处(几乎总是插件市场的授权请求)被送过来的。
+    bool fromApp = !string.IsNullOrEmpty(Model.ReturnUrl);
+}
+
+@section Aside {
+    <div class="aside-pitch">
+        <h2>一个账号,通吃上传、评价与审核。</h2>
+        <p>浏览和搜索从不需要登录。只有要发布插件、写评价,或者进审核台的时候,才会走到这里。</p>
+        <ul class="aside-points">
+            <li>
+                <span class="mark">@await Html.PartialAsync("_Icon", "key")</span>
+                <span>
+                    <b>授权码 + PKCE</b>
+                    <span>令牌不落在地址栏里,也不经过任何第三方;回跳地址在服务端白名单里逐条登记。</span>
+                </span>
+            </li>
+            <li>
+                <span class="mark">@await Html.PartialAsync("_Icon", "cookie")</span>
+                <span>
+                    <b>会话只留在本站</b>
+                    <span>插件市场拿到的是一枚有期限的访问令牌,拿不到你的口令,也读不到这里的 cookie。</span>
+                </span>
+            </li>
+            <li>
+                <span class="mark">@await Html.PartialAsync("_Icon", "rotate")</span>
+                <span>
+                    <b>改口令即刻生效</b>
+                    <span>其它设备的刷新令牌立刻失效;已签发的访问令牌切不掉,最长还能再用一个令牌周期。</span>
+                </span>
+            </li>
+        </ul>
+    </div>
+}
+
+@if (fromApp)
+{
+    <span class="from-chip">
+        @await Html.PartialAsync("_Icon", "arrow-left")
+        授权后回到你刚才的操作
+    </span>
 }
 
 <h1>登录</h1>
-<p class="lede">登录后回到你刚才的操作。</p>
+<p class="lede">用你的 VelaShell 账号继续。</p>
 
 @if (!string.IsNullOrEmpty(Model.Error))
 {
-    <p class="notice error">@Model.Error</p>
+    <p class="notice error">
+        @await Html.PartialAsync("_Icon", "alert")
+        <span>@Model.Error</span>
+    </p>
 }
 
 <form method="post">
     <input type="hidden" asp-for="ReturnUrl" />
+
     <label>
         <span>用户名或邮箱</span>
-        <input asp-for="Input.Login" autocomplete="username" autofocus required />
+        <span class="control">
+            @await Html.PartialAsync("_Icon", "user")
+            <input asp-for="Input.Login" autocomplete="username" autofocus required placeholder="joesdu" />
+        </span>
         <span asp-validation-for="Input.Login" class="field-error"></span>
     </label>
+
     <label>
-        <span>口令</span>
-        <input asp-for="Input.Password" type="password" autocomplete="current-password" required />
+        <span class="field-head">
+            <span>口令</span>
+        </span>
+        <span class="control">
+            @await Html.PartialAsync("_Icon", "lock")
+            <input asp-for="Input.Password" type="password" autocomplete="current-password" required placeholder="••••••••" />
+            <button type="button" class="reveal" data-reveal="@Html.IdFor(m => m.Input.Password)" aria-label="显示口令">
+                @await Html.PartialAsync("_Icon", "eye")
+            </button>
+        </span>
         <span asp-validation-for="Input.Password" class="field-error"></span>
     </label>
-    <label class="check">
-        <input asp-for="Input.RememberMe" type="checkbox" />
-        <span>记住我</span>
-    </label>
+
+    <div class="row-between">
+        <label class="check">
+            <input asp-for="Input.RememberMe" type="checkbox" />
+            <span>记住我</span>
+        </label>
+        <span class="hint">勾上后这台设备一段时间内不再询问</span>
+    </div>
+
     <button type="submit">登录</button>
 </form>
 
@@ -35,3 +96,8 @@
 {
     <p class="alt">还没有账号?<a asp-page="/Account/Register" asp-route-returnUrl="@Model.ReturnUrl">注册一个</a></p>
 }
+
+<p class="foot-note">
+    @await Html.PartialAsync("_Icon", "shield")
+    <span>登录状态只保存在本站的会话 cookie 里。这个页面永远不会向你要插件包、签名密钥或支付信息。</span>
+</p>

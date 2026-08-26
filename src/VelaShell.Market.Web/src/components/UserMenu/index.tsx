@@ -1,5 +1,5 @@
 import { login, logout } from '@/utils/auth';
-import { UserOutlined } from '@ant-design/icons';
+import { CloudUploadOutlined, LogoutOutlined, ProfileOutlined, UserOutlined } from '@ant-design/icons';
 import { history, useModel } from '@umijs/max';
 import { Avatar, Button, Dropdown, theme } from 'antd';
 
@@ -24,17 +24,18 @@ export default function UserMenu() {
 
   return (
     <Dropdown
+      placement="bottomRight"
       menu={{
         items: [
-          { key: 'mine', label: '我的上传', onClick: () => history.push('/mine') },
-          { key: 'plugins', label: '我的插件', onClick: () => history.push('/owner') },
+          { key: 'mine', label: '我的上传', icon: <CloudUploadOutlined />, onClick: () => history.push('/mine') },
+          { key: 'plugins', label: '我的插件', icon: <ProfileOutlined />, onClick: () => history.push('/owner') },
           { type: 'divider' as const },
-          { key: 'logout', label: '退出登录', danger: true, onClick: () => logout() },
+          { key: 'logout', label: '退出登录', icon: <LogoutOutlined />, danger: true, onClick: () => logout() },
         ],
       }}
     >
       <span className="market-user-entry">
-        <Avatar size="small" icon={<UserOutlined />} style={{ background: token.colorPrimary }} />
+        <Avatar size={24} icon={<UserOutlined />} style={{ background: token.colorPrimary }} />
         <span>{currentUser.name}</span>
       </span>
     </Dropdown>

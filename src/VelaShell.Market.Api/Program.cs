@@ -162,6 +162,7 @@ app.UseAuthorization();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 app.MapAccountEndpoints();
+app.MapStatsEndpoints();
 app.MapPluginEndpoints();
 app.MapOwnerEndpoints();
 app.MapUploadEndpoints();

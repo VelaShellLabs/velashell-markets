@@ -1,9 +1,9 @@
-import { App, Button, Card, Drawer, Empty, Form, Input, Skeleton, Space, Table, Tag, Tooltip, Typography } from 'antd';
+import { App, Button, Drawer, Empty, Form, Input, Skeleton, Space, Table, Tooltip, Typography } from 'antd';
 import { EditOutlined, ReloadOutlined } from '@ant-design/icons';
 import { getMyPlugins, updatePlugin } from '@/services/me';
 import { history, useRequest } from '@umijs/max';
 
-import { PageShell } from '@/components';
+import { Chip, PageShell } from '@/components';
 import { formatDateTime } from '@/utils/format';
 import { keepResult } from '@/utils/request';
 import { useState } from 'react';
@@ -53,20 +53,15 @@ export default function OwnerPage() {
       }
     >
       {loading && !data ? (
-        <Card>
-          <Skeleton active paragraph={{ rows: 4 }} />
-        </Card>
+        <Skeleton active paragraph={{ rows: 4 }} />
       ) : items.length === 0 ? (
-        <Card>
-          <Empty description="你还没有发布过插件">
-            <Button type="primary" onClick={() => history.push('/upload')}>
-              去发布
-            </Button>
-          </Empty>
-        </Card>
+        <Empty description="你还没有发布过插件" style={{ padding: '64px 0' }}>
+          <Button type="primary" onClick={() => history.push('/upload')}>
+            去发布
+          </Button>
+        </Empty>
       ) : (
-        <Card styles={{ body: { padding: 0 } }}>
-          <Table<MeAPI.MyPlugin>
+        <Table<MeAPI.MyPlugin>
             rowKey="id"
             dataSource={items}
             loading={loading}
@@ -84,7 +79,7 @@ export default function OwnerPage() {
                   </Space>
                 ),
               },
-              { title: '最新版本', dataIndex: 'latestVersion', width: 110, render: (value) => (value ? <Tag variant="filled">v{value}</Tag> : <Tag variant="filled">未发布</Tag>) },
+              { title: '最新版本', dataIndex: 'latestVersion', width: 110, render: (value) => (value ? <span className="mono">v{value}</span> : <Chip>未发布</Chip>) },
               { title: '下载', dataIndex: 'downloads', width: 90 },
               { title: '评分', width: 120, render: (_, row) => (row.ratingCount > 0 ? `${row.ratingAverage.toFixed(1)} (${row.ratingCount})` : '—') },
               {
@@ -94,14 +89,10 @@ export default function OwnerPage() {
                 render: (_, row) =>
                   row.isUnlisted ? (
                     <Tooltip title={row.unlistedReason}>
-                      <Tag color="error" variant="filled">
-                        已下架
-                      </Tag>
+                      <Chip tone="danger">已下架</Chip>
                     </Tooltip>
                   ) : (
-                    <Tag color="success" variant="filled">
-                      正常
-                    </Tag>
+                    <Chip tone="ok">正常</Chip>
                   ),
               },
               { title: '更新于', dataIndex: 'updatedAt', width: 180, render: formatDateTime },
@@ -114,9 +105,8 @@ export default function OwnerPage() {
                   </Button>
                 ),
               },
-            ]}
-          />
-        </Card>
+          ]}
+        />
       )}
 
       <Drawer

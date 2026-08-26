@@ -60,6 +60,29 @@ public static class VpxStaticInspector
     };
 
     /// <summary>
+    /// 给包内的一个条目贴标签,供审核台的「包内清单」着色。
+    ///
+    /// 与第 4 层内容启发**共用同一组扩展名表** —— 审核员在清单里看到的高亮,
+    /// 必须和检测器实际判定的口径一致;各记一份的话,迟早出现"报告说有脚本、
+    /// 清单里却没标出来"这种让人怀疑报告本身的场面。
+    /// </summary>
+    /// <param name="entryPath">包内相对路径。</param>
+    /// <returns><c>blocked</c> / <c>suspicious</c>,都不是则为 null。</returns>
+    public static string? Classify(string entryPath)
+    {
+        string extension = Path.GetExtension(entryPath);
+        if (string.IsNullOrEmpty(extension))
+        {
+            return null;
+        }
+        if (BlockedExtensions.Contains(extension))
+        {
+            return "blocked";
+        }
+        return SuspiciousExtensions.Contains(extension) ? "suspicious" : null;
+    }
+
+    /// <summary>
     /// 跑一遍静态检查。<paramref name="package" /> 必须是可定位的流(容器读取要 Seek)。
     /// 不抛异常:任何问题都表达成 <see cref="ScanFinding" /> —— 检测器自己崩掉不该让上传者收到一句 500。
     /// </summary>

@@ -1,8 +1,8 @@
 import { PLUGIN_SCOPES, PLUGIN_SCOPE_FLAG, type PluginScope } from '@/configs';
 import { usePagedTable } from '@/hooks';
-import { clearPluginDescription, getModeratedPlugins, relistPlugin, takedownPlugin, unlistPlugin } from '@/services/moderation';
+import { clearPluginDescription, getModeratedPlugins, relistPlugin, setPluginFeatured, takedownPlugin, unlistPlugin } from '@/services/moderation';
 import { formatDateTime } from '@/utils/format';
-import { ReloadOutlined } from '@ant-design/icons';
+import { ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { App, Button, Empty, Input, Segmented, Space, Table, Tag, Tooltip, Typography, type TableColumnsType } from 'antd';
 import { askReason } from './askReason';
 
@@ -97,6 +97,16 @@ export default function PluginsPanel() {
       },
     );
 
+  const toggleFeatured = async (row: ModerationAPI.ModeratedPlugin) => {
+    try {
+      await setPluginFeatured(row.id, !row.isFeatured);
+      api.message.success(row.isFeatured ? '已取消推荐' : `${row.displayName} 已设为编辑推荐`);
+      reload();
+    } catch {
+      // 失败信息已由统一错误处理展示(比如插件已下架、或者一个版本都还没发布)。
+    }
+  };
+
   const columns: TableColumnsType<ModerationAPI.ModeratedPlugin> = [
     {
       title: '插件',
@@ -156,9 +166,16 @@ export default function PluginsPanel() {
     },
     {
       title: '操作',
-      width: 300,
+      width: 370,
       render: (_, row) => (
         <Space size={4} wrap>
+          {/* 编辑推荐是加分动作,不必填原因(那条约束是给**处置**用的);
+              但服务端仍然记日志 —— 首屏那个位置是稀缺资源。 */}
+          <Tooltip title={row.isFeatured ? '取消后浏览页首屏不再展示它' : '设为编辑推荐:浏览页首屏那张双宽卡片'}>
+            <Button size="small" type={row.isFeatured ? 'primary' : 'default'} icon={<ThunderboltOutlined />} disabled={!row.isFeatured && (row.isUnlisted || !row.latestVersion)} onClick={() => toggleFeatured(row)}>
+              {row.isFeatured ? '推荐中' : '设为推荐'}
+            </Button>
+          </Tooltip>
           {row.isUnlisted ? (
             <Button size="small" onClick={() => relist(row)}>
               恢复上架

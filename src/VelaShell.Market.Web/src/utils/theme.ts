@@ -114,18 +114,72 @@ export function useThemeMode(): { mode: ThemeMode; dark: boolean; setMode: (next
  * 而且 umi 的 ConfigProvider 在根主题的**内部**,内层写死的 colorBgLayout 会把外层算出来的
  * 暗色背景覆盖回浅色。
  */
+/**
+ * 字体栈。Inter 走拉丁字形与数字,中文自然回落到系统字体 ——
+ * 不引 web font:一个内网/离线部署的插件市场不该为了字形去连 Google Fonts。
+ */
+const fontFamily = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif";
+
+/** 等宽字体。id、版本号、哈希、包内路径一律用它 —— 这些是要被复制和逐字比对的东西。 */
+export const monoFontFamily = "'JetBrains Mono', 'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace";
+
+/**
+ * 两套 antd 主题令牌。整站只在这里定一次,并与 global.less 顶部那组 CSS 变量**逐项对齐** ——
+ * 自定义区块(卡片、评价条、Markdown 正文)拿不到 antd 令牌,只能走 CSS 变量,
+ * 两边取值不一致的话,antd 组件和自定义区块放在一起就像两张皮。
+ *
+ * 这里显式给 colorBgContainer / colorBorder 而不是只给 colorBgBase 让算法去推:
+ * 推出来的值每次升级 antd 都可能变一点,而这套界面到处是"发丝线 + 白底卡片"的组合,
+ * 边框色差一档就能看出来。
+ */
 export const themeTokens = {
   light: {
     colorPrimary: '#4f46e5',
-    borderRadius: 8,
+    colorInfo: '#4f46e5',
+    colorSuccess: '#0e9f6e',
+    colorWarning: '#c2740a',
+    colorError: '#d92d20',
+    colorLink: '#4338ca',
+    colorText: '#0f1419',
+    colorTextSecondary: '#5a6474',
+    colorTextTertiary: '#8c96a6',
+    colorBgLayout: '#f5f6f8',
+    colorBgContainer: '#ffffff',
+    colorBgElevated: '#ffffff',
+    colorFillQuaternary: '#eff1f4',
+    colorBorder: '#e4e7ec',
+    colorBorderSecondary: '#eff1f4',
+    borderRadius: 9,
+    borderRadiusLG: 13,
+    borderRadiusSM: 7,
     fontSize: 14,
-    colorBgLayout: '#f6f7fb',
+    fontFamily,
+    fontFamilyCode: monoFontFamily,
+    controlHeight: 36,
   },
   dark: {
     // 暗色下把主色提亮一档:#4f46e5 在深色背景上对比度不够,链接和主按钮会发闷。
     colorPrimary: '#7c74f2',
-    borderRadius: 8,
+    colorInfo: '#7c74f2',
+    colorSuccess: '#34d399',
+    colorWarning: '#f5b547',
+    colorError: '#f97066',
+    colorLink: '#b7b1fa',
+    colorText: '#eaedf2',
+    colorTextSecondary: '#98a2b3',
+    colorTextTertiary: '#6a7383',
+    colorBgLayout: '#0e1014',
+    colorBgContainer: '#16181d',
+    colorBgElevated: '#1c1f26',
+    colorFillQuaternary: '#1c1f26',
+    colorBorder: '#272b33',
+    colorBorderSecondary: '#202429',
+    borderRadius: 9,
+    borderRadiusLG: 13,
+    borderRadiusSM: 7,
     fontSize: 14,
-    colorBgLayout: '#16161a',
+    fontFamily,
+    fontFamilyCode: monoFontFamily,
+    controlHeight: 36,
   },
 } as const;

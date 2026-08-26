@@ -1,7 +1,9 @@
+using System.IO.Compression;
 using System.Security.Claims;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver;
+using VelaShell.PluginSdk.Packaging;
 using VelaShell.Market.Api.Options;
 using VelaShell.Market.Domain;
 using VelaShell.Market.Infrastructure.Persistence;
@@ -24,6 +26,8 @@ public static class ModerationEndpoints
                                      .WithTags("Moderation");
 
         group.MapGet("/queue", QueueAsync).WithSummary("待人工复核的版本(带完整检测报告)。");
+        group.MapGet("/versions/{id}/entries", EntriesAsync).WithSummary("隔离区里那个包的包内清单(文件名、大小、可疑标记)。");
+        group.MapGet("/versions/{id}/sample", SampleAsync).WithSummary("下载隔离区里的样本包(只经 API 转发,不签发对外 URL)。");
         group.MapPost("/versions/{id}/approve", ApproveAsync).WithSummary("放行:搬进正式桶并发布。");
         group.MapPost("/versions/{id}/reject", RejectAsync).WithSummary("驳回:留在隔离区,记录原因。");
 
@@ -34,6 +38,8 @@ public static class ModerationEndpoints
              .WithSummary("强制下架:下架并**物理删除**正式桶里的全部已发布版本,不可逆。");
         group.MapPost("/plugins/{pluginId}/clear-description", ClearDescriptionAsync)
              .WithSummary("清空违规描述,保留插件本身。");
+        group.MapPost("/plugins/{pluginId}/feature", FeatureAsync).WithSummary("设为「编辑推荐」,在浏览页首屏占一张双宽卡片。");
+        group.MapPost("/plugins/{pluginId}/unfeature", UnfeatureAsync).WithSummary("取消「编辑推荐」。");
 
         group.MapGet("/reviews", ReviewsAsync).WithSummary("评价治理列表(含已隐藏,可按插件/关键词筛)。");
         group.MapPost("/reviews/{id}/hide", HideReviewAsync).WithSummary("隐藏违规评价(可撤销,不计入评分)。");
@@ -51,22 +57,156 @@ public static class ModerationEndpoints
                                               .SortBy(v => v.UploadedAt)
                                               .Limit(200)
                                               .ToListAsync().ConfigureAwait(false);
-        return Results.Ok(pending
-                          .Where(v => v.Scan?.Verdict == ScanVerdict.NeedsReview)
-                          .Select(v => new
-                          {
-                              id = v.Id.ToString(),
-                              v.PluginId,
-                              v.Version,
-                              v.UploadedBySubject,
-                              v.UploadedAt,
-                              v.PackageSize,
-                              signature = v.SignatureState,
-                              findings = v.Scan!.Findings.Select(f => new { f.Code, severity = f.Severity.ToString(), f.Message, f.Path })
-                          }));
+        List<PluginVersion> queue = [.. pending.Where(v => v.Scan?.Verdict == ScanVerdict.NeedsReview)];
+
+        // 审核台是左队列右详情的分栏,选中一条就要立刻显示上传者、历史与引擎信息 ——
+        // 这些一次带出来,省掉"每点一条再查一次"的往返。
+        List<string> pluginIds = [.. queue.Select(v => v.PluginId).Distinct(StringComparer.Ordinal)];
+        Dictionary<string, Plugin> plugins = pluginIds.Count == 0
+                                                 ? []
+                                                 : (await db.Plugins.Find(p => pluginIds.Contains(p.Id)).ToListAsync().ConfigureAwait(false))
+                                                 .ToDictionary(p => p.Id, StringComparer.Ordinal);
+        Dictionary<string, int> publishedCounts = [];
+        foreach (string pluginId in pluginIds)
+        {
+            publishedCounts[pluginId] = (int)await db.Versions
+                                                     .CountDocumentsAsync(v => v.PluginId == pluginId && v.Status == PluginVersionStatus.Published)
+                                                     .ConfigureAwait(false);
+        }
+
+        return Results.Ok(queue.Select(v => new
+        {
+            id = v.Id.ToString(),
+            v.PluginId,
+            displayName = plugins.TryGetValue(v.PluginId, out Plugin? p) ? p.DisplayName : v.PluginId,
+            v.Version,
+            v.UploadedBySubject,
+            uploadedByName = plugins.TryGetValue(v.PluginId, out Plugin? owner) ? owner.OwnerName : null,
+            v.UploadedAt,
+            v.PackageSize,
+            signature = v.SignatureState,
+            // 这个作者此前有多少个版本平安通过 —— 判断"换签名密钥"这类告警时最有用的一条背景。
+            publishedVersions = publishedCounts.GetValueOrDefault(v.PluginId),
+            scan = new
+            {
+                verdict = v.Scan!.Verdict.ToString(),
+                v.Scan.StartedAt,
+                v.Scan.CompletedAt,
+                v.Scan.Engines,
+                v.Scan.EntryCount,
+                v.Scan.UnpackedBytes,
+                v.Scan.Attempts
+            },
+            findings = v.Scan.Findings.Select(f => new { f.Code, severity = f.Severity.ToString(), f.Message, f.Path })
+        }));
     }
 
-    private static async Task<IResult> ApproveAsync(string id, MarketDbContext db, PackageStorage storage, CancellationToken cancellationToken)
+    /// <summary>
+    /// 包内清单。审核员判断"这个脚本到底是干什么的"之前,总要先看见包里都有什么。
+    ///
+    /// 只对**还在隔离区**的版本开放:已发布的包任何人都能下载,没必要再走审核通道;
+    /// 而这个端点会把隔离区里的东西读出来,它的存在本身就该被限制在最小范围里。
+    /// </summary>
+    private static async Task<IResult> EntriesAsync(string id, MarketDbContext db, PackageStorage storage, CancellationToken cancellationToken)
+    {
+        (PluginVersion? version, IResult? error) = await FindQuarantinedAsync(id, db, cancellationToken).ConfigureAwait(false);
+        if (error is not null)
+        {
+            return error;
+        }
+
+        string temp = Path.Combine(Path.GetTempPath(), $"vpx-entries-{Guid.NewGuid():N}.vpx");
+        try
+        {
+            await using (Stream remote = await storage.OpenQuarantineAsync(version!.ObjectKey, cancellationToken).ConfigureAwait(false))
+            await using (FileStream local = File.Create(temp))
+            {
+                // S3 的响应流不可 Seek,而读容器要定位 —— 先落一份本地临时文件。
+                await remote.CopyToAsync(local, cancellationToken).ConfigureAwait(false);
+            }
+
+            await using Stream payload = VpxContainer.OpenPayload(temp);
+            using ZipArchive archive = new(payload, ZipArchiveMode.Read);
+            var entries = archive.Entries
+                                 .Where(e => !string.IsNullOrEmpty(e.Name))
+                                 .OrderBy(e => e.FullName, StringComparer.Ordinal)
+                                 .Take(2000)
+                                 .Select(e => new
+                                 {
+                                     path = e.FullName,
+                                     size = e.Length,
+                                     compressed = e.CompressedLength,
+                                     flag = VpxStaticInspector.Classify(e.FullName)
+                                 })
+                                 .ToList();
+            return Results.Ok(new { total = archive.Entries.Count, truncated = archive.Entries.Count > entries.Count, entries });
+        }
+        catch (VpxFormatException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(temp);
+            }
+            catch (IOException)
+            {
+                // 临时文件删不掉不影响这次读取。
+            }
+        }
+    }
+
+    /// <summary>
+    /// 下载隔离区里的样本。
+    ///
+    /// 刻意**由 API 转发字节流**,而不是像正式桶那样签一个预签名 URL:
+    /// 隔离桶永远不该有对外可访问的地址 —— 一旦签得出来,那个链接就会被转发、被缓存、
+    /// 被写进工单,而它指向的正是一个尚未通过检测的包。走 API 的话,每一次读取都带着
+    /// 审核员自己的令牌,过期即失效,也留得下痕。
+    /// </summary>
+    private static async Task<IResult> SampleAsync(string id, MarketDbContext db, PackageStorage storage,
+        ILoggerFactory loggerFactory, ClaimsPrincipal user, CancellationToken cancellationToken)
+    {
+        (PluginVersion? version, IResult? error) = await FindQuarantinedAsync(id, db, cancellationToken).ConfigureAwait(false);
+        if (error is not null)
+        {
+            return error;
+        }
+        loggerFactory.CreateLogger("Moderation")
+                     .LogWarning("Moderator {Subject} downloaded quarantined sample {PluginId} {Version}.",
+                         user.Subject(), version!.PluginId, version.Version);
+
+        Stream remote = await storage.OpenQuarantineAsync(version.ObjectKey, cancellationToken).ConfigureAwait(false);
+        return Results.Stream(remote, "application/vnd.velashell.plugin",
+            $"{version.PluginId}-{version.Version}.vpx");
+    }
+
+    /// <summary>取一个仍在隔离区的版本。返回的 error 非 null 时直接回给调用方。</summary>
+    private static async Task<(PluginVersion? Version, IResult? Error)> FindQuarantinedAsync(string id, MarketDbContext db, CancellationToken cancellationToken)
+    {
+        if (!MongoDB.Bson.ObjectId.TryParse(id, out MongoDB.Bson.ObjectId objectId))
+        {
+            return (null, Results.BadRequest(new { error = "非法的版本 id。" }));
+        }
+        PluginVersion? version = await db.Versions.Find(v => v.Id == objectId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        if (version is null)
+        {
+            return (null, Results.NotFound());
+        }
+        return version.Status is PluginVersionStatus.Quarantined or PluginVersionStatus.Scanning or PluginVersionStatus.Rejected
+                   ? (version, null)
+                   : (null, Results.Problem(statusCode: StatusCodes.Status409Conflict, detail: "该版本已不在隔离区。"));
+    }
+
+    /// <summary>
+    /// 放行。<paramref name="note" /> 可空:放行不强制填原因(它不是对作者的处置),
+    /// 但填了就一起记进报告 —— 事后要能回答的是"当时为什么判断这个可疑项没问题",
+    /// 而这句话只有按下按钮的那个人知道。
+    /// </summary>
+    private static async Task<IResult> ApproveAsync(string id, [FromBody] ModerationReason? note,
+        MarketDbContext db, PackageStorage storage, ClaimsPrincipal user, ILogger<ModerationAudit> logger, CancellationToken cancellationToken)
     {
         if (!MongoDB.Bson.ObjectId.TryParse(id, out MongoDB.Bson.ObjectId objectId))
         {
@@ -84,8 +224,10 @@ public static class ModerationEndpoints
         }
         ScanReport report = version.Scan ?? new();
         report.Verdict = ScanVerdict.Passed;
-        report.Findings.Add(new("MANUAL_APPROVED", ScanSeverity.Info, "已由审核员人工放行。"));
+        string reason = note?.Reason?.Trim() is { Length: > 0 } text ? $"已由审核员人工放行:{text}" : "已由审核员人工放行。";
+        report.Findings.Add(new("MANUAL_APPROVED", ScanSeverity.Info, reason));
         report.CompletedAt = DateTime.UtcNow;
+        logger.LogInformation("审核员 {Moderator} 放行 {PluginId} {Version}。{Note}", user.Subject(), version.PluginId, version.Version, note?.Reason);
 
         // 复用流水线里那一份发布逻辑:审核放行与自动放行必须走同一条路径,
         // 否则两条路迟早会长出不一样的元数据。
@@ -167,6 +309,8 @@ public static class ModerationEndpoints
                 p.Downloads,
                 p.RatingAverage,
                 p.RatingCount,
+                p.IsFeatured,
+                p.FeaturedAt,
                 p.IsUnlisted,
                 p.UnlistedReason,
                 p.UnlistedAt,
@@ -324,6 +468,45 @@ public static class ModerationEndpoints
             return Results.NotFound();
         }
         logger.LogWarning("审核员 {Moderator} 清空插件 {PluginId} 的描述,原因:{Reason}", user.Subject(), pluginId, reason.Reason);
+        return Results.NoContent();
+    }
+
+    /// <summary>
+    /// 设为「编辑推荐」。浏览页首屏那张双宽卡片就是它。
+    ///
+    /// 不要求填原因:推荐是加分动作,作者不会因为被推荐而需要一个解释 ——
+    /// 「必须填原因」这条约束是给**处置**用的,套到所有动作上只会让人学会随手打个"ok"。
+    /// 但仍然记日志:首屏位置是稀缺资源,事后要能回答"谁把它放上去的"。
+    /// </summary>
+    private static async Task<IResult> FeatureAsync(string pluginId, MarketDbContext db, ClaimsPrincipal user,
+        ILogger<ModerationAudit> logger, CancellationToken cancellationToken)
+    {
+        UpdateResult result = await db.Plugins.UpdateOneAsync(
+            p => p.Id == pluginId && !p.IsUnlisted && p.LatestVersion != null,
+            Builders<Plugin>.Update.Set(p => p.IsFeatured, true).Set(p => p.FeaturedAt, DateTime.UtcNow),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (result.MatchedCount == 0)
+        {
+            // 已下架、或者一个版本都还没发布的插件推不上去:首屏点进去只会是 404 或空页。
+            return Results.Problem(statusCode: StatusCodes.Status409Conflict,
+                detail: "该插件不存在、已下架,或还没有任何已发布版本。");
+        }
+        logger.LogInformation("审核员 {Moderator} 把 {PluginId} 设为编辑推荐。", user.Subject(), pluginId);
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> UnfeatureAsync(string pluginId, MarketDbContext db, ClaimsPrincipal user,
+        ILogger<ModerationAudit> logger, CancellationToken cancellationToken)
+    {
+        UpdateResult result = await db.Plugins.UpdateOneAsync(
+            p => p.Id == pluginId,
+            Builders<Plugin>.Update.Set(p => p.IsFeatured, false).Set(p => p.FeaturedAt, null),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (result.MatchedCount == 0)
+        {
+            return Results.NotFound();
+        }
+        logger.LogInformation("审核员 {Moderator} 取消了 {PluginId} 的编辑推荐。", user.Subject(), pluginId);
         return Results.NoContent();
     }
 

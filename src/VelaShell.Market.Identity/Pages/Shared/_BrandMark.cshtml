@@ -1,0 +1,12 @@
+@*
+    帆船字标。Vela 是船帆座 —— 帆的形状既对得上名字,也比又一个立方体/齿轮有辨识度。
+    内联 svg 而不是 <img>:它要跟着 currentColor 走,外链的 svg 拿不到页面的 CSS 变量。
+    与插件市场前端 src/components/Brand 里那一份是同一个图形,两处改要一起改。
+*@
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M2 18a4 4 0 0 0 3.2 1.6h13.6A4 4 0 0 0 22 18" />
+    <path d="M4 15h16l-2 3H6z" />
+    <path d="M12 13V2L4.5 13" />
+    <path d="M13.5 13H20L14 5.5" />
+</svg>
