@@ -109,6 +109,25 @@ body {
   display: none;
 }
 
+/* 页脚吸底。ProLayout 只给 .ant-pro-layout-container 一个 position: relative,
+   它是普通块级元素,于是内容不满一屏时页脚跟着内容末尾停在页面中间。
+   把它撑成至少一屏高的纵向弹性容器,再让内容区吃掉剩余空间,页脚自然落到底边;
+   内容超过一屏时 min-height 不再起作用,页脚照旧跟在内容后面。
+   高度用 100vh 而不是 100%:祖先链上没有一路把高度传下来,百分比会退化成 auto。
+   fixedHeader 下顶栏是 fixed 定位、不占高,占位的是 ProLayout 自己补的那个等高
+   占位块 —— 它在流内、是弹性项,所以这里的 100vh 不会多出一条滚动条。 */
+.ant-pro-layout .ant-pro-layout-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* 不用 flex: 1(它的 flex-basis 是 0):浏览页的深色带靠内容自身高度撑开,
+   basis 归零会让它先塌一下再被 grow 拉回来。1 0 auto 保留内容的自然高度。 */
+.ant-pro-layout .ant-pro-layout-container > .ant-pro-layout-content {
+  flex: 1 0 auto;
+}
+
 /* 顶栏内容与页面用同一个左右内边距 —— 品牌 logo 的左边缘和卡片的左边缘因此对齐。 */
 .ant-pro-top-nav-header-main {
   max-width: none;
@@ -320,15 +339,34 @@ body {
   color: var(--hero-ink-2);
 }
 
-/* 搜索框在深底上:半透明底 + 一道细边,比纯白输入框更贴这块深色带。 */
+/* 搜索框在深底上:半透明底 + 一道细边,比纯白输入框更贴这块深色带。
+   做成胶囊形,左图标右圆钮 —— 圆钮是这块深色带上唯一的主色块,视线自然落上去。
+   className 落在 .ant-input-affix-wrapper 本身(带 prefix/suffix 的 Input 是这样渲染的),
+   所以下面用 &.ant-input-affix-wrapper 提一档权重,盖过 antd 的 -lg 尺寸内边距。 */
 .market-hero-search {
-  max-width: 600px;
+  max-width: 560px;
 }
 
-.market-hero-search .ant-input-affix-wrapper,
-.market-hero-search .ant-input {
+.market-hero-search.ant-input-affix-wrapper {
+  padding: 5px 5px 5px 20px;
+  border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.19);
+  color: var(--hero-ink);
+}
+
+.market-hero-search.ant-input-affix-wrapper:hover,
+.market-hero-search.ant-input-affix-wrapper-focused {
+  border-color: rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* 输入框自己必须透明:它盖在上面那层半透明底之上,再给一次背景色就会叠成两层深浅。
+   字号交给 size="large" 的 16px,不在这里覆盖 —— antd 那条是
+   `.ant-input-affix-wrapper-lg > .ant-input`,与这条同权重且在运行时后注入,
+   写了也盖不住,留一条不生效的声明只会误导下一个人。 */
+.market-hero-search .ant-input {
+  background: transparent;
   color: var(--hero-ink);
 }
 
@@ -336,13 +374,30 @@ body {
   color: var(--hero-faint);
 }
 
-.market-hero-search .ant-input-affix-wrapper:hover,
-.market-hero-search .ant-input-affix-wrapper-focused {
-  border-color: rgba(255, 255, 255, 0.34);
+.market-hero-search .ant-input-clear-icon {
+  color: var(--hero-faint);
 }
 
-.market-hero-search .anticon {
+.market-hero-search .ant-input-clear-icon:hover {
   color: var(--hero-ink-2);
+}
+
+/* suffix 里塞了按钮,antd 默认的左外边距是按图标算的,这里改由按钮自己留白。 */
+.market-hero-search .ant-input-suffix {
+  margin-inline-start: 8px;
+  gap: 8px;
+}
+
+/* 三段选择器不是啰嗦:antd 给 icon-only 圆钮的尺寸规则是同权重、且在运行时才注入,
+   排在这份样式表后面。少一段就盖不住,按钮会保持 36×32 —— 配上 50% 圆角
+   渲染出来是个椭圆,不是圆。 */
+.market-hero-search .market-hero-search-go.ant-btn {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  flex: none;
+  font-size: 15px;
+  box-shadow: none;
 }
 
 .market-hero-hot {
