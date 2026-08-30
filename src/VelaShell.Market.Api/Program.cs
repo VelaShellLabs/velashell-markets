@@ -30,7 +30,7 @@ builder.Services.Configure<ClamAvOptions>(builder.Configuration.GetSection(ClamA
 builder.Services.Configure<MarketAuthOptions>(builder.Configuration.GetSection(MarketAuthOptions.SectionName));
 
 // ---- 身份认证:资源服务器姿态 ------------------------------------------------
-// 市场自己不发令牌,只验统一认证服务(src/VelaShell.Market.Identity)签发的 JWT:
+// 市场自己不发令牌,只验统一认证服务(独立仓库 velashell-identity)签发的 JWT:
 // 经 discovery 拿到 JWKS,再逐条校验签名、issuer、audience 与有效期。
 MarketAuthOptions auth = builder.Configuration.GetSection(MarketAuthOptions.SectionName).Get<MarketAuthOptions>() ?? new();
 // 浏览器看到的地址(issuer)与 API 能访问到的地址不一定是同一个:compose 里前者是

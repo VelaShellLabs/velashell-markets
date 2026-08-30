@@ -5,7 +5,7 @@ import { UserManager, WebStorageStateStore, type User } from 'oidc-client-ts';
 export type MarketUser = User;
 
 /**
- * 对接统一认证服务(src/VelaShell.Market.Identity,OpenIddict + MongoDB)的登录。
+ * 对接统一认证服务(独立仓库 velashell-identity,OpenIddict + MongoDB)的登录。
  *
  * 用**授权码 + PKCE**:服务端强制 PKCE,也不实现隐式模式。浏览器里的公开客户端没有
  * 可保密的地方,所以这里不放任何 client secret —— 真需要机密客户端就得由后端代持。

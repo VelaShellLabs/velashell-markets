@@ -132,45 +132,11 @@ services:
       retries: 20
       start_period: 300s
 
-  # 统一认证服务(OpenIddict + MongoDB)。商店点"登录"就跳到它,登录完再跳回商店。
-  identity:
-    build:
-      context: .
-      dockerfile: build/identity.Dockerfile
-    container_name: market-identity
-    restart: unless-stopped
-    depends_on:
-      mongo_primary:
-        condition: service_healthy
-    environment:
-      - TZ=Asia/Chongqing
-      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
-      - ASPNETCORE_HTTP_PORTS=8080
-      # 副本集连接串:成员在 rs 配置里公告的是 host.docker.internal,
-      # 所以这里也用它(经 extra_hosts 走 host-gateway),驱动做拓扑发现时地址才对得上。
-      - ConnectionStrings__Mongo=mongodb://${MONGO_ROOT_USER:-market}:${MONGO_ROOT_PASSWORD:-change-me-please}@host.docker.internal:27017,host.docker.internal:27018/velashell-identity?authSource=admin&replicaSet=rs0
-      # issuer 必须是**浏览器能打开**的地址:它同时是令牌里的 iss,也是 discovery 里所有端点的前缀。
-      # 换成对外域名时,下面 api 的 Auth__Issuer 与 web 的 MARKET_AUTHORITY 要一起改。
-      - Identity__Issuer=${IDENTITY_ISSUER:-http://localhost:7020}
-      - Identity__RequireHttps=${IDENTITY_REQUIRE_HTTPS:-false}
-      - Identity__KeyDirectory=/app/keys
-      # 前端客户端的回跳白名单。不在名单里的 redirect_uri 会被直接拒绝,这是防钓鱼的第一道闸。
-      - Identity__Clients__0__ClientId=velashell-market-web
-      - Identity__Clients__0__DisplayName=VelaShell 插件市场
-      - Identity__Clients__0__RedirectUris__0=${WEB_ORIGIN:-http://localhost:8000}/callback
-      - Identity__Clients__0__PostLogoutRedirectUris__0=${WEB_ORIGIN:-http://localhost:8000}
-      - Identity__Clients__0__Scopes__0=velashell-market
-      - Accounts__AllowSelfRegistration=${ALLOW_SELF_REGISTRATION:-true}
-      # 首个账号:只在账号集合为空时创建。留空则去 /account/register 自助注册。
-      - Accounts__Bootstrap__UserName=${BOOTSTRAP_USER:-}
-      - Accounts__Bootstrap__Password=${BOOTSTRAP_PASSWORD:-}
-    volumes:
-      # 签名与加密密钥。丢了等于换签发者:所有已发出的令牌一起失效,所有人被登出。
-      - identity-keys:/app/keys
-    ports:
-      - "7020:8080"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+  # 统一认证服务已拆到独立仓库 velashell-identity(2026-08-30)。
+  # 它是整个生态的信任根,资讯服务等也在用,不该跟着插件市场的发版节奏走。
+  #
+  # 起法:在 velashell-identity 仓库里 `docker compose up -d`(它自带 MongoDB,能独立跑),
+  # 然后本仓库经 host.docker.internal 连过去 —— 见下面 api 的 Auth__Authority。
 
   api:
     build:
@@ -184,8 +150,6 @@ services:
       minio:
         condition: service_healthy
       clamav:
-        condition: service_started
-      identity:
         condition: service_started
     environment:
       - TZ=Asia/Chongqing
@@ -208,10 +172,12 @@ services:
       - ObjectStorage__SecretKey=${MINIO_ROOT_PASSWORD:-minioadmin}
       - ClamAv__Host=clamav
       - ClamAv__Port=3310
-      # 认证:Issuer 是令牌里的 iss(浏览器看到的地址),Authority 是 API 在容器网络里
-      # 真正能访问到的地址。两者指的是同一个服务,详见 docs/identity-integration.md。
+      # 认证:统一认证服务在独立仓库 velashell-identity,先把它起起来。
+      # Issuer 是令牌里的 iss(浏览器看到的地址);Authority 是本容器真正能访问到的地址 ——
+      # 认证服务不再与本 compose 同网络,所以走 host.docker.internal。
+      # 两者指同一个服务,详见 docs/identity-integration.md。
       - Auth__Issuer=${IDENTITY_ISSUER:-http://localhost:7020}
-      - Auth__Authority=http://identity:8080
+      - Auth__Authority=${IDENTITY_INTERNAL:-http://host.docker.internal:7020}
       - Auth__Audience=${AUTH_AUDIENCE:-velashell-market}
       - Auth__RequireHttpsMetadata=${AUTH_REQUIRE_HTTPS:-false}
       - Auth__AllowedOrigins__0=${WEB_ORIGIN:-http://localhost:8000}
@@ -250,4 +216,3 @@ volumes:
   mongodb_master_data:
   minio-data:
   clamav-db:
-  identity-keys:

@@ -1,6 +1,11 @@
 # 统一认证(OIDC)
 
-市场自己不发令牌。发令牌的是仓库里的另一个服务 **`src/VelaShell.Market.Identity`** ——
+> **2026-08-30:认证服务已拆到独立仓库 [velashell-identity](https://github.com/joesdu/velashell-identity)。**
+> 它不再只服务插件市场(资讯服务等也在用),而一个信任根不该跟着某个业务仓库的发版节奏走。
+> 本文保留的是**市场这一侧怎么接入**;认证服务自身的运维、加新客户端、以及那三个
+> "改了就出事"的常量,见那个仓库的 README。
+
+市场自己不发令牌。发令牌的是独立仓库里的 **velashell-identity** ——
 一个基于 [OpenIddict](https://documentation.openiddict.com/) 的 OIDC 授权服务器,账号与协议数据都存在 MongoDB 里。
 
 ```
@@ -20,7 +25,13 @@
 
 ## 一、跑起来
 
+认证服务在**另一个仓库**,先起它:
+
 ```powershell
+# 在 velashell-identity 仓库里(它自带 MongoDB,能独立跑)
+docker compose up -d
+
+# 回到本仓库
 docker compose up -d
 ```
 
@@ -118,7 +129,9 @@ docker compose up -d
 
 ## 七、接第二个客户端
 
-比如给 VelaShell 宿主本身加登录,在 identity 服务的环境变量里加一组:
+**这件事现在在 [velashell-identity](https://github.com/joesdu/velashell-identity) 仓库做**
+(它的 README 有一节专讲"接一个新服务进来")。下面留作参考 ——
+在那个仓库的 `docker-compose.yml` 里给 identity 服务加一组环境变量:
 
 ```yaml
 - Identity__Clients__1__ClientId=velashell-host

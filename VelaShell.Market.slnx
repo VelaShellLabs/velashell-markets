@@ -10,7 +10,6 @@
   <Folder Name="/src/">
     <Project Path="src/VelaShell.Market.Api/VelaShell.Market.Api.csproj" />
     <Project Path="src/VelaShell.Market.Domain/VelaShell.Market.Domain.csproj" />
-    <Project Path="src/VelaShell.Market.Identity/VelaShell.Market.Identity.csproj" />
     <Project Path="src/VelaShell.Market.Infrastructure/VelaShell.Market.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
