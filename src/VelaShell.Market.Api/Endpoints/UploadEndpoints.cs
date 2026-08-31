@@ -247,7 +247,7 @@ public static class UploadEndpoints
                     Publisher = manifest.Publisher,
                     Homepage = manifest.Homepage,
                     License = manifest.License,
-                    DescriptionMarkdown = description ?? "",
+                    DescriptionMarkdown = string.IsNullOrWhiteSpace(description) ? "" : description,
                     Tags = TagList.Normalize(tags)
                 };
                 await db.Plugins.InsertOneAsync(plugin, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -260,10 +260,18 @@ public static class UploadEndpoints
             }
             else
             {
+                // 发版表单里的说明 / 标签是**可选覆盖**,不是必填项:发新版本时留空的字段
+                // 一律保持插件页上原有的内容。理由很实际 —— 发版页上这些框每次都是空的,
+                // 若把空值当成"清空",作者每发一个补丁版就会把辛苦写好的插件说明和标签抹掉一次。
+                // 填了才覆盖,没填就当没提过。
                 UpdateDefinition<Plugin> update = Builders<Plugin>.Update.Set(p => p.UpdatedAt, DateTime.UtcNow);
                 if (!string.IsNullOrWhiteSpace(description))
                 {
-                    update = update.Set(p => p.DescriptionMarkdown, description);
+                    update = update.Set(p => p.DescriptionMarkdown, description)
+                                   // 与 OwnerEndpoints.EditAsync 一致:作者重写了描述,
+                                   // 审核员那条"描述因违规已被移除"的说明就该跟着消失。
+                                   .Set(p => p.DescriptionRemovedReason, null)
+                                   .Set(p => p.DescriptionRemovedAt, null);
                 }
                 if (!string.IsNullOrWhiteSpace(tags))
                 {
@@ -307,7 +315,9 @@ public static class UploadEndpoints
                 Entry = manifest.Entry,
                 ActivationEvents = ManifestProjection.ToActivationEvents(manifest),
                 Contributes = ManifestProjection.ToContributions(manifest),
-                ReleaseNotesMarkdown = releaseNotes ?? "",
+                // 同一个版本重传(还在隔离区或被拒后修包重来)时留空,沿用上一次写的版本说明。
+                // 被拒重传往往只是换个包,没道理逼作者把版本说明再抄一遍;新版本没有"原有的",落空串。
+                ReleaseNotesMarkdown = string.IsNullOrWhiteSpace(releaseNotes) ? existing?.ReleaseNotesMarkdown ?? "" : releaseNotes,
                 PackageSize = file.Length,
                 PayloadSha256 = info.PayloadSha256,
                 FileSha256 = fileSha,
