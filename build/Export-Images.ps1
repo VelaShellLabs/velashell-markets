@@ -14,7 +14,6 @@
     产物文件名与镜像名照 NAS 上那份部署目录的既有约定:
 
         velashell-market-api.tar        →  velashell-market/api:latest
-        velashell-market-identity.tar   →  velashell-market/identity:latest
         velashell-market-web.tar        →  velashell-market/web:latest
 
     那边的 docker-compose.yml 里三个服务已经是 `image: velashell-market/xxx:latest`、
@@ -71,7 +70,7 @@
 param(
     # 不用 ValidateSet:`pwsh ./build/Export-Images.ps1 -Service api,identity` 走的是 -File,
     # 逗号列表会原样当成一个字符串塞进来,ValidateSet 直接判死。下面自己拆自己校。
-    [string[]]$Service = @('api', 'identity', 'web'),
+    [string[]]$Service = @('api', 'web'),
 
     # 默认导到 build/ 自己身上,不写死任何盘符 —— 换台机器直接就能跑。
     # 复制到 NAS 那一步人工做。
@@ -152,12 +151,6 @@ $Catalog = [ordered]@{
         TarName    = 'velashell-market-api.tar'
         Context    = '.'
         Dockerfile = 'build/api.Dockerfile'
-    }
-    identity = @{
-        Image      = 'velashell-market/identity:latest'
-        TarName    = 'velashell-market-identity.tar'
-        Context    = '.'
-        Dockerfile = 'build/identity.Dockerfile'
     }
     web      = @{
         Image      = 'velashell-market/web:latest'
