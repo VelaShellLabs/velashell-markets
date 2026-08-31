@@ -3,8 +3,9 @@
 ## 分层
 
 ```
-VelaShell.Market.Identity       统一认证(OpenIddict + MongoDB):签令牌、账号与注册
+velashell-identity(独立仓库)  统一认证(OpenIddict + MongoDB):签令牌、账号与注册
         ╎ 只经 OIDC 协议往来:签名的 JWT + 一份 JWKS,没有任何代码依赖
+        ╎ ——— 正因如此,它于 2026-08-30 拆了出去 ———
 VelaShell.Market.Api            最小 API、OIDC 资源服务器、Markdown 渲染、审核台
         │
 VelaShell.Market.Infrastructure Mongo 上下文与索引、S3 存储、ClamAV、检测流水线

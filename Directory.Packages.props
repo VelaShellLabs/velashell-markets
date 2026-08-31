@@ -14,14 +14,7 @@
   </ItemGroup>
   <ItemGroup>
     <!-- 插件包容器与清单:与 VelaShell 宿主同一份实现。 -->
-    <PackageVersion Include="VelaShell.PluginSdk" Version="1.5.0" />
-  </ItemGroup>
-  <ItemGroup>
-    <!-- 统一认证服务(VelaShell.Market.Identity)的 OIDC 实现。
-         7.6.0 是稳定版,包里带 net10.0 目标框架 —— net11 共享框架向前兼容,能直接用;
-         认证服务是整个市场的信任根,这里刻意不跟 8.0 的 preview。 -->
-    <PackageVersion Include="OpenIddict.AspNetCore" Version="8.0.0-preview.2.26365.61" />
-    <PackageVersion Include="OpenIddict.MongoDb" Version="8.0.0-preview.2.26365.61" />
+    <PackageVersion Include="VelaShell.PluginSdk" Version="2.0.0" />
   </ItemGroup>
   <ItemGroup>
     <PackageVersion Include="MongoDB.Driver" Version="3.11.0" />
