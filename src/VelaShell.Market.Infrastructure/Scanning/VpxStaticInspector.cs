@@ -37,8 +37,19 @@ public sealed record VpxInspection(
 /// </summary>
 public static class VpxStaticInspector
 {
-    /// <summary>市场当前认可的最高 apiLevel(高于它的包宿主也装不上,不如在门口就说清楚)。</summary>
-    public const int MaxApiLevel = 1;
+    /// <summary>
+    /// 市场当前认可的最高 apiLevel(高于它的包宿主也装不上,不如在门口就说清楚)。
+    ///
+    /// **直接取自 SDK,不要抄成字面量。** 这里原本硬编码成 1,SDK 从第 1 代升到第 2 代时
+    /// 没人记得同步它,于是市场把所有为当代 SDK 编译的插件一律判为 Blocking 拒收 ——
+    /// 而唯一的报错信号是作者上传后收到一条"市场只接受不超过 1 的插件",
+    /// 没有任何构建期或启动期的提示。这个上限的语义本来就是"市场认得的最新代际",
+    /// 那它就该跟着市场编译时用的那份 SDK 走,而不是靠人去记得改两处。
+    ///
+    /// 注意它与"某个宿主装不装得上"是两回事:后者由列表页按宿主 apiLevel 过滤
+    /// (见 PluginEndpoints 的 <c>latestApiLevel</c> 过滤),老宿主自然看不到新代际的插件。
+    /// </summary>
+    public static int MaxApiLevel => VelaPluginApi.Level;
 
     private const int MaxEntries = 10_000;
     private const long MaxUnpackedBytes = 512L * 1024 * 1024;
