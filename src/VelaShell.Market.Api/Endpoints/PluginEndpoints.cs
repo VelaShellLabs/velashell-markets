@@ -1,5 +1,5 @@
-using MongoDB.Bson;
 using MongoDB.Driver;
+using MongoDB.Driver.Linq;
 using VelaShell.Market.Api.Services;
 using VelaShell.Market.Domain;
 using VelaShell.Market.Infrastructure.Persistence;
@@ -292,21 +292,23 @@ public static class PluginEndpoints
     }
 
     /// <summary>
-    /// 标签云。这里用**显式的 BsonDocument 管道**而不是强类型链式写法:
-    /// unwind + group + sort 这一串在强类型 API 下的中间类型很难看懂,而管道本身只有四行,
-    /// 直接写出来反而是最清楚的 —— 出问题时贴进 mongosh 就能跑。
+    /// 标签云。
+    ///
+    /// 这里原先是一条手写的 BsonDocument 管道,理由是"贴进 mongosh 就能跑"。代价是字段名
+    /// 不再由驱动从映射翻译,而库里是 camelCase:管道里写着 <c>$Tags</c> / <c>IsUnlisted</c>,
+    /// Mongo 不报字段不存在,标签云就一直是空列表。想看实际管道,对 queryable 调 ToString()
+    /// 就能拿到 —— 用不着为此把字段名手写一遍。
     /// </summary>
     private static async Task<IResult> TagsAsync(MarketDbContext db)
     {
-        PipelineDefinition<Plugin, BsonDocument> pipeline = new BsonDocument[]
-        {
-            new("$match", new BsonDocument { { "IsUnlisted", false }, { "LatestVersion", new BsonDocument("$ne", BsonNull.Value) } }),
-            new("$unwind", "$Tags"),
-            new("$group", new BsonDocument { { "_id", "$Tags" }, { "count", new BsonDocument("$sum", 1) } }),
-            new("$sort", new BsonDocument("count", -1)),
-            new("$limit", 100)
-        };
-        List<BsonDocument> tags = await db.Plugins.Aggregate(pipeline).ToListAsync().ConfigureAwait(false);
-        return Results.Ok(tags.Select(t => new { tag = t["_id"].AsString, count = t["count"].AsInt32 }));
+        var tags = await db.Plugins.AsQueryable()
+                           .Where(p => !p.IsUnlisted && p.LatestVersion != null)
+                           .SelectMany(p => p.Tags)
+                           .GroupBy(tag => tag)
+                           .Select(g => new { tag = g.Key, count = g.Count() })
+                           .OrderByDescending(t => t.count)
+                           .Take(100)
+                           .ToListAsync().ConfigureAwait(false);
+        return Results.Ok(tags);
     }
 }

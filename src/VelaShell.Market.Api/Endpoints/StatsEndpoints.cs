@@ -1,5 +1,5 @@
-using MongoDB.Bson;
 using MongoDB.Driver;
+using MongoDB.Driver.Linq;
 using VelaShell.Market.Domain;
 using VelaShell.Market.Infrastructure.Persistence;
 
@@ -35,12 +35,14 @@ public static class StatsEndpoints
 
         // 累计下载在 plugins 上求和而不是在 versions 上:下架的插件不再计入对外展示的总量,
         // 而 Plugin.Downloads 本身就是各版本之和(下载端点对两处同时 $inc)。
-        List<BsonDocument> sum = await db.Plugins.Aggregate<BsonDocument>(new BsonDocument[]
-        {
-            new("$match", new BsonDocument { { "IsUnlisted", false } }),
-            new("$group", new BsonDocument { { "_id", BsonNull.Value }, { "total", new BsonDocument("$sum", "$Downloads") } })
-        }, cancellationToken: cancellationToken).ToListAsync(cancellationToken).ConfigureAwait(false);
-        long downloads = sum.Count == 0 ? 0 : sum[0]["total"].ToInt64();
+        //
+        // 走 LINQ 而不是手写 BsonDocument 管道:字段名交给驱动从 Plugin 的映射翻译
+        // (Downloads → downloads,库里是 camelCase)。这里原先手写成 "$Downloads" 与
+        // "IsUnlisted",Mongo 不会报字段不存在 —— $match 先筛掉全部文档,累计下载于是恒为 0,
+        // 接口照常 200。这类错误只有让驱动来写字段名才能在编译期挡掉。
+        long downloads = await db.Plugins.AsQueryable()
+                                 .Where(p => !p.IsUnlisted)
+                                 .SumAsync(p => p.Downloads, cancellationToken).ConfigureAwait(false);
 
         // 不变量:带阻断级发现的包永远不该出现在正式桶里。这个数字本来就该恒为 0,
         // 把它露在首屏是**故意**的 —— 哪天它不是 0 了,第一个看见的人就是访客。
