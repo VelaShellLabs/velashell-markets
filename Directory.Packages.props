@@ -20,10 +20,10 @@
     <PackageVersion Include="MongoDB.Driver" Version="3.11.0" />
     <!-- 对象存储走 S3 协议(MinIO 兼容),不绑定 MinIO 自家 SDK:
          将来换 S3/OSS/COS 只改配置里的 Endpoint 与凭据。 -->
-    <PackageVersion Include="AWSSDK.S3" Version="4.0.102.4" />
+    <PackageVersion Include="AWSSDK.S3" Version="4.0.103" />
     <PackageVersion Include="Markdig" Version="1.3.2" />
     <!-- net10 版在 net11 上照常可用(共享框架向前兼容);等 net11 正式版的包出来再抬。 -->
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="11.0.0-preview.7.26381.103" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="11.0.0-rc.1.26425.128" />
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.2.3" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.1-dev-02312" />
   </ItemGroup>
