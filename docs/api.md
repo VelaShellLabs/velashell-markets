@@ -14,6 +14,7 @@
 | GET | `/api/stats` | 站点概览:`plugins` / `versions` / `downloads` / `blockingPublished` |
 | GET | `/api/plugins` | 检索。`q` 关键词、`tag` 标签、`apiLevel` 宿主兼容性、`featured` 只看编辑推荐、`sort`(updated/downloads/rating/created)、`page`/`size` |
 | GET | `/api/plugins/{id}` | 详情:渲染后的 Markdown、已发布版本列表、每个版本的贡献点与**公开检测结论** |
+| GET | `/api/plugins/latest` | **按 id 批量取最新已发布版本**(宿主插件管理页检查更新用)。`ids` 逗号分隔(≤200)、`pre` 是否把预发布也算进来(默认否)。返回按插件 id 索引的表:版本号、`apiLevel` / `minHostVersion` / `minSdkVersion`、签名结论与**发布者指纹**、两个 SHA-256、包大小。已下架的插件与商店上没有的 id **不出现在结果里**,与详情接口 404 的口径一致 |
 | GET | `/api/plugins/{id}/related` | 相关插件:`byAuthor`(同一作者)+ `byTags`(标签重合) |
 | GET | `/api/plugins/{id}/versions/{version}/download` | 换一个短时效下载 URL(**只签正式桶**),同时返回两个 SHA-256 |
 | GET | `/api/plugins/tags` | 标签云 |
