@@ -4,9 +4,46 @@
     <RootNamespace>VelaShell.Market.Api</RootNamespace>
     <Description>VelaShell 插件市场的 HTTP API:上传与隔离检测、插件与版本检索、评价、下载签名、审核台。</Description>
     <UserSecretsId>velashell-market-api</UserSecretsId>
-    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
-    <DockerfileContext>..\..</DockerfileContext>
   </PropertyGroup>
+
+  <!-- ================= 容器 =================
+       镜像由 .NET SDK 直接产出(`dotnet publish -t:PublishContainer`),仓库里不再有 api 的 Dockerfile。
+       构建用的是**本机 SDK**,于是不存在"镜像里的 SDK 比 global.json 旧"这类问题 ——
+       只有运行时那一份要对上,见下面 ContainerBaseImage 的说明。
+       (前端 web 仍然是 Dockerfile:它是 nginx + dist,不是 .NET 工程,SDK 容器发布管不着。) -->
+  <PropertyGroup Label="容器">
+    <!-- 基础镜像。正式版 aspnet:11.0 里的运行时正是 11.0.0-rc.1.26425.128,与 global.json
+         钉的 SDK 同一版 —— 运行时只能向前滚补丁,基础镜像比编译用的 SDK 旧就会直接
+         "找不到框架"。换基础镜像前先确认这一点。 -->
+    <ContainerBaseImage>mcr.microsoft.com/dotnet/aspnet:11.0</ContainerBaseImage>
+    <!-- 名字里的斜杠不是装饰:Harbor 要求镜像名的第一段是**已经建好的项目名**,
+         推之前不存在的项目不会被自动创建,只会被拒收。velashell 就是 Harbor 上那个项目
+         (harbor.easilynet.top/velashell/market-api)。市场、认证等服务共用它,
+         所以第二段带 market- 前缀把自己认出来。改这里等于改推送地址。 -->
+    <ContainerRepository>velashell/market-api</ContainerRepository>
+    <ContainerImageTag>latest</ContainerImageTag>
+
+    <!-- ⚠️ 显式指定 ContainerBaseImage 会让 SDK 认定"这不是微软的默认镜像",
+         于是**不再自动设置非 root 用户** —— 不写这一行,镜像就是 root 跑的。
+         这个进程要解开陌生人上传的压缩包,能少一层权限就少一层。
+         app 是 aspnet 镜像里预置的用户(uid/gid 1654,即 $APP_UID)。 -->
+    <ContainerUser>app</ContainerUser>
+
+    <!-- 本机的容器运行时不止一个:除了 Docker Desktop 还有 WSL 的容器存储(wslc),
+         留空让 SDK 自动探测的话它会挑中 wslc,镜像进了 `docker images` 看不见的地方,
+         compose 自然也起不来。钉死 Docker。推 Harbor 时用 -p:ContainerRegistry=,与此无关。 -->
+    <LocalRegistry>Docker</LocalRegistry>
+
+    <!-- VS 里按 F5 直接以容器方式调试本项目(SDK 容器模式,不经 Dockerfile)。 -->
+    <EnableSdkContainerDebugging>true</EnableSdkContainerDebugging>
+  </PropertyGroup>
+
+  <ItemGroup Label="容器">
+    <ContainerPort Include="8080" Type="tcp" />
+    <!-- 镜像自己就能跑:单独 `docker run` 时不必再传。compose 里那份是同值覆盖。 -->
+    <ContainerEnvironmentVariable Include="ASPNETCORE_HTTP_PORTS" Value="8080" />
+    <ContainerEnvironmentVariable Include="DOTNET_gcServer" Value="1" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\VelaShell.Market.Infrastructure\VelaShell.Market.Infrastructure.csproj" />
@@ -16,7 +53,6 @@
     <PackageReference Include="EasilyNET.Mongo" />
     <PackageReference Include="EasilyNET.WebCore" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
-    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" />
     <PackageReference Include="Swashbuckle.AspNetCore" />
     <PackageReference Include="Serilog.AspNetCore" />
     <PackageReference Include="Markdig" />

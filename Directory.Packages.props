@@ -10,7 +10,6 @@
     <PackageVersion Include="EasilyNET.WebCore" Version="6.26.826.94" />
     <PackageVersion Include="EasilyNET.Mongo.Core" Version="6.26.826.94" />
     <PackageVersion Include="EasilyNET.Mongo" Version="6.26.826.94" />
-    <PackageVersion Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.24.2-preview.1" />
   </ItemGroup>
   <ItemGroup>
     <!-- 插件包容器与清单:与 VelaShell 宿主同一份实现。 -->

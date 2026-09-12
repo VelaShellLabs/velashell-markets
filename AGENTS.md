@@ -52,9 +52,18 @@ VelaShell 生态的**全部文档**集中在一个仓库:
 cp .env.example .env      # 至少改掉 MONGO_ROOT_PASSWORD
 $env:SEED_DEMO_DATA='true'
 $env:ASPNETCORE_ENVIRONMENT='Development'
-docker compose up -d
+pwsh ./build/Publish-Images.ps1   # api 没有 Dockerfile,镜像是 SDK 直接出的
+docker compose up -d              # compose 不构建 api,只跑
 dotnet run --project src/VelaShell.Market.Api
 ```
+
+改了后端代码不重跑发布脚本的话,`docker compose up -d` 起的还是旧镜像。
+镜像的一切(名字、基础镜像、非 root 用户、暴露端口)只在
+`src/VelaShell.Market.Api/VelaShell.Market.Api.csproj` 的「容器」段里定义;
+搬运与推 Harbor 见 `docs/images.md`。镜像名是 `velashell/market-api` 与 `velashell/market-web`
+—— 第一段是 Harbor 上的项目名(`harbor.easilynet.top/velashell`),与认证服务共用,
+所以第二段要带 `market-` 前缀。部署机用 `.env` 的 `MARKET_API_IMAGE` / `MARKET_WEB_IMAGE`
+指向远端镜像,不必改 compose。
 
 ```bash
 dotnet build VelaShell.Market.slnx
