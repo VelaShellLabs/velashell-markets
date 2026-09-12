@@ -5,7 +5,9 @@
     <DockerTargetOS>Linux</DockerTargetOS>
     <ProjectGuid>81dded9d-158b-e303-5f62-77a2896d2a5a</ProjectGuid>
     <!-- 启动(F5/Ctrl+F5)先对整套 compose 做 docker compose build:
-         web 服务带 build 节。前端不在容器里打包:dist/ 由 Web 项目在本机
+         web 服务仍带 build 节(api 没有 —— 它没有 Dockerfile,镜像由
+         build/Publish-Images.ps1 产出,F5 之前要先跑过一次)。
+         前端不在容器里打包:dist/ 由 Web 项目在本机
          (bun run build)产出,slnx 里那条 BuildDependency 保证它先于 compose 跑,
          镜像只是把 dist/ 装进 nginx。随后打开商店首页。 -->
     <DockerLaunchBrowser>True</DockerLaunchBrowser>
@@ -14,6 +16,5 @@
   </PropertyGroup>
   <ItemGroup>
     <None Include="docker-compose.yml" />
-    <None Include=".dockerignore" />
   </ItemGroup>
 </Project>

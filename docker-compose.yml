@@ -139,9 +139,13 @@ services:
   # 然后本仓库经 host.docker.internal 连过去 —— 见下面 api 的 Auth__Authority。
 
   api:
-    build:
-      context: .
-      dockerfile: build/api.Dockerfile
+    # 镜像不再由 compose 构建:`dotnet publish -t:PublishContainer` 产出它,
+    # 见 build/Publish-Images.ps1。没先发布过的话这里会去 Docker Hub 拉一个不存在的镜像。
+    #
+    # 默认值是**本机发布出来的那个名字**,开发机上 `docker compose up -d` 直接命中。
+    # 从 Harbor 拉着跑的机器在 .env 里写:
+    #   MARKET_API_IMAGE=harbor.easilynet.top/velashell/market-api:latest
+    image: ${MARKET_API_IMAGE:-velashell/market-api:latest}
     container_name: market-api
     restart: unless-stopped
     depends_on:
@@ -190,9 +194,18 @@ services:
       - "host.docker.internal:host-gateway"
 
   web:
+    # 前端是 nginx + dist,不是 .NET 工程,SDK 容器发布管不着它 —— build/web.Dockerfile 保留。
+    # image 与 build 同时写:compose 构建出来的标签就是下面这个,与
+    # build/Publish-Images.ps1 产出的**完全同名**,所以两条路不会留下两份对不上的产物。
+    # 保留 build 节是为了 VS 的 F5(dcproj 靠它先构建前端镜像)。
+    # api 没有这一节 —— 它根本没有 Dockerfile,镜像只能由发布脚本产出。
     build:
       context: ./src/VelaShell.Market.Web
       dockerfile: ../../build/web.Dockerfile
+    # 从 Harbor 拉着跑的机器在 .env 里写:
+    #   MARKET_WEB_IMAGE=harbor.easilynet.top/velashell/market-web:latest
+    # 那台机器不会走上面的 build 节(没有源码),compose pull 直接取远端镜像。
+    image: ${MARKET_WEB_IMAGE:-velashell/market-web:latest}
     container_name: market-web
     restart: unless-stopped
     depends_on:

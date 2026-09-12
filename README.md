@@ -22,8 +22,18 @@ cp .env.example .env      # 至少改掉 MONGO_ROOT_PASSWORD
 # 起全套,并播三个演示插件 —— 它们会**真的走一遍检测流水线**后才出现在首页
 $env:SEED_DEMO_DATA='true'
 $env:ASPNETCORE_ENVIRONMENT='Development'
-docker compose up -d --build
+# 先出镜像。api 的镜像由 .NET SDK 直接产出(仓库里没有 api 的 Dockerfile),
+# web 仍是 nginx + dist,两个都由这个脚本管。
+pwsh ./build/Publish-Images.ps1
+
+docker compose up -d
 ```
+
+**api 的镜像不再由 compose 构建** —— 改了后端代码之后要先
+`pwsh ./build/Publish-Images.ps1 -Service api`,`docker compose up -d` 不会替你重新构建。
+镜像名、基础镜像、非 root 用户与暴露端口只写在
+`src/VelaShell.Market.Api/VelaShell.Market.Api.csproj` 的「容器」段里。
+搬运与推仓库(Harbor)见 [docs/images.md](docs/images.md)。
 
 浏览、搜索、看详情不需要登录;上传、评价、审核要登录。第一次进来先去
 <http://localhost:7020/account/register> 注册一个账号,登录后那一页会显示你的 `sub` ——
@@ -49,9 +59,10 @@ dotnet run --project src/VelaShell.Market.Api      # API
 cd src/VelaShell.Market.Web && bun install && bun run dev   # 前端(代理到 8080)
 ```
 
-同级目录下存在 `VelaShell` 仓库时,`.vpx` 解析会**直接引用宿主那份 SDK 工程**
-(见根 `Directory.Build.props` 的 `UseLocalVelaShellSdk`),改一处两边同步;
-容器构建看不到同级仓库,自动回退到 NuGet 包。
+`.vpx` 解析用的是 NuGet 上的 `VelaShell.PluginSdk`(版本钉在 `Directory.Packages.props`)。
+早先"同级目录有 VelaShell 仓库就改引用本地工程"的那个开关已经没有了 —— 于是
+**宿主机构建与容器构建拿到的是同一个包**,这在 api 改用 SDK 容器发布(镜像在宿主机上编译)
+之后尤其要紧:那条路本来最容易把本机的临时改动烤进镜像。
 
 前端用 bun,仓库里只有 `bun.lock`,没有 package-lock.json。**前端不在容器里打包**:
 `build/web.Dockerfile` 只把 `dist/` 装进 nginx 镜像,所以在没跑过打包的机器上
