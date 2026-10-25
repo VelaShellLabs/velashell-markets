@@ -101,6 +101,8 @@ public static class UploadEndpoints
                 }
                 using StreamReader reader = new(entry.Open());
                 manifest = PluginManifestReader.Parse(await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false));
+                // 版本号按 SemanticVersion 收紧(与静态检查、vela-plugin pack 同一口径),认领之前就说清楚。
+                ManifestVersionRules.Require(manifest);
             }
             catch (VpxFormatException ex)
             {
@@ -222,6 +224,8 @@ public static class UploadEndpoints
                 }
                 using StreamReader reader = new(entry.Open());
                 manifest = PluginManifestReader.Parse(await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false));
+                // 版本号按 SemanticVersion 收紧(与静态检查、vela-plugin pack 同一口径),认领之前就说清楚。
+                ManifestVersionRules.Require(manifest);
             }
             catch (VpxFormatException ex)
             {

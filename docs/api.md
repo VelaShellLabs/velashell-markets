@@ -27,8 +27,8 @@
 | --- | --- | --- |
 | GET | `/api/me` | 当前用户,含 `subject` / `email` / `isModerator` |
 | GET | `/api/me/plugins` | 我拥有的插件 |
-| POST | `/api/uploads/inspect` | **只读预检**:读出包内清单与签名状态,不落盘、不入库、不排队。顺带回答"这个 id 是不是已被别人认领""这个版本是不是已发布" |
-| POST | `/api/uploads` | 上传 `.vpx`(multipart:`file` + `description` / `releaseNotes` / `tags`)。**同步只做认领与落隔离桶**,检测在后台 |
+| POST | `/api/uploads/inspect` | **只读预检**:读出包内清单与签名状态,不落盘、不入库、不排队。顺带回答"这个 id 是不是已被别人认领""这个版本是不是已发布"。清单不合法(含版本号不合 `SemanticVersion`,见下)时 400 |
+| POST | `/api/uploads` | 上传 `.vpx`(multipart:`file` + `description` / `releaseNotes` / `tags`)。**同步只做认领与落隔离桶**,检测在后台。清单不合法(含版本号不合 `SemanticVersion`)时 400,不占隔离区 |
 | POST | `/api/uploads/preview` | 把 Markdown 渲染成插件页上最终会显示的 HTML(与发布走同一个渲染器) |
 | GET | `/api/uploads/mine` | 我的上传与完整检测报告 |
 | PUT | `/api/plugins/{id}` | 改插件页面(描述 / 标签 / 主页)。仅拥有者 |
@@ -46,7 +46,7 @@
 | GET | `/api/moderation/queue` | 待人工复核的版本(带完整检测报告、上传者与该插件的历史发布数) |
 | GET | `/api/moderation/versions/{id}/entries` | 包内清单(文件名 / 大小 / 可疑标记)。**只对仍在隔离区的版本开放** |
 | GET | `/api/moderation/versions/{id}/sample` | 下载隔离区里的样本包。**由 API 转发字节流**,不签发对外 URL |
-| POST | `/api/moderation/versions/{id}/approve` | 放行并发布(与自动放行走同一条 `PublishAsync`)。`{ "reason": "…" }` 可选,填了会记进报告 |
+| POST | `/api/moderation/versions/{id}/approve` | 放行并发布(与自动放行走同一条 `PublishAsync`)。`{ "reason": "…" }` 可选,填了会记进报告。版本号不合现行规则(规则收紧之前进隔离区的)时 409,只能驳回 |
 | POST | `/api/moderation/versions/{id}/reject` | 驳回,`{ "reason": "…" }` 必填 |
 | GET | `/api/moderation/plugins` | 插件治理列表(含已下架) |
 | POST | `/api/moderation/plugins/{pluginId}/unlist` | 软下架,`{ "reason": "…" }` |
@@ -61,6 +61,11 @@
 ## 几个刻意的约定
 
 - **插件 id、版本、apiLevel、minHostVersion、hostMode 一律取自包内的 `plugin.json`**,任何接口都不接受手填 —— 否则展示的和实际装的能对不上。
+- **版本号的规则与先后一律以 SDK 的 `SemanticVersion` 为准**(与宿主、`vela-plugin` 同一份实现)。
+  上传时 `version` / `minHostVersion` / `minSdkVersion` 都要能被它解析(比 SDK 清单正则严:`1.0.0-beta.01`、
+  `1.0.0-a..b` 这类会被拒,报错里给出改法)。详情页的版本列表、`LatestVersion` 与 `/api/plugins/latest`
+  按完整 SemVer 优先级排序(`beta.2 < beta.10`);规则收紧之前就已发布、如今解析不出的版本排在最旧,
+  只要还有合法版本就不会被挑成「最新」。「正式版」指能解析且不带预发布后缀的版本。
 - 上传是 `202 Accepted` 而不是 `201`:那一刻包只是进了隔离区,还不是"已发布"。
 - 下载每次签 URL 即 `$inc` 计数(原子),目前**不做去重**。
 - 评价的 Markdown 与插件描述一样,**只存原文**,渲染在读取时做并经白名单清洗。

@@ -64,6 +64,28 @@ public class LatestVersionSelectionTests
     }
 
     [TestMethod]
+    public void Ordering_ComparesPreReleaseIdentifiersNumerically()
+    {
+        // 换成 SDK 的 SemanticVersion 之前,预发布后缀按序数比字符串,"beta.10" 会输给 "beta.2"。
+        PluginVersion? picked = PluginEndpoints.SelectLatest(
+            [Version("2.0.0-beta.2"), Version("2.0.0-beta.10"), Version("2.0.0-beta.9")], includePreRelease: true);
+
+        Assert.AreEqual("2.0.0-beta.10", picked?.Version);
+    }
+
+    [TestMethod]
+    public void UnparsableVersions_AreNeverPickedWhileAValidOneExists()
+    {
+        // 收紧清单校验之前就已发布的 1.0.0-beta.01 一类:当最旧。
+        // 2147483648.0.0 不带 '-',旧的「不带 '-' 就是正式版」判法会把它当正式版挑出来。
+        PluginVersion[] published =
+            [Version("9.0.0-beta.01"), Version("0.2.0-alpha.1"), Version("9.0.0-a..b"), Version("2147483648.0.0")];
+
+        Assert.AreEqual("0.2.0-alpha.1", PluginEndpoints.SelectLatest(published, includePreRelease: false)?.Version);
+        Assert.AreEqual("0.2.0-alpha.1", PluginEndpoints.SelectLatest(published, includePreRelease: true)?.Version);
+    }
+
+    [TestMethod]
     public void NoPublishedVersions_YieldsNothing()
     {
         Assert.IsNull(PluginEndpoints.SelectLatest([], includePreRelease: true),

@@ -7,6 +7,7 @@ using MongoDB.Driver;
 using VelaShell.Market.Domain;
 using VelaShell.Market.Infrastructure.Persistence;
 using VelaShell.Market.Infrastructure.Storage;
+using VelaShell.PluginSdk.Versioning;
 
 namespace VelaShell.Market.Infrastructure.Scanning;
 
@@ -247,7 +248,7 @@ public sealed class PackageReviewWorker(
         List<PluginVersion> published = await db.Versions
                                                 .Find(v => v.PluginId == version.PluginId && v.Status == PluginVersionStatus.Published)
                                                 .ToListAsync(cancellationToken).ConfigureAwait(false);
-        PluginVersion latest = published.OrderByDescending(v => v.Version, SemVerComparer.Instance).First();
+        PluginVersion latest = published.OrderByDescending(v => v.Version, SemanticVersion.TextComparer).First();
         UpdateDefinition<Plugin> pluginUpdate = Builders<Plugin>.Update
             .Set(p => p.LatestVersion, latest.Version)
             .Set(p => p.LatestApiLevel, latest.ApiLevel)
@@ -273,51 +274,4 @@ public sealed class PackageReviewWorker(
         db.Versions.UpdateOneAsync(v => v.Id == id,
             Builders<PluginVersion>.Update.Set(v => v.Status, status).Set(v => v.Scan, report),
             cancellationToken: cancellationToken);
-}
-
-/// <summary>
-/// semver 排序。只比较数字段并让**预发布版本低于同号正式版**(1.0.0-beta &lt; 1.0.0),
-/// 够用且可预期;完整 semver 优先级规则(比较预发布标识符)留待真有需要再说。
-/// </summary>
-public sealed class SemVerComparer : IComparer<string>
-{
-    /// <summary>共享实例。</summary>
-    public static readonly SemVerComparer Instance = new();
-
-    /// <inheritdoc />
-    public int Compare(string? x, string? y)
-    {
-        if (x is null || y is null)
-        {
-            return string.CompareOrdinal(x, y);
-        }
-        (int[] Numbers, string Pre) left = Split(x);
-        (int[] Numbers, string Pre) right = Split(y);
-        for (int i = 0; i < Math.Max(left.Numbers.Length, right.Numbers.Length); i++)
-        {
-            int a = i < left.Numbers.Length ? left.Numbers[i] : 0;
-            int b = i < right.Numbers.Length ? right.Numbers[i] : 0;
-            if (a != b)
-            {
-                return a.CompareTo(b);
-            }
-        }
-        return (left.Pre.Length == 0, right.Pre.Length == 0) switch
-        {
-            (true, false) => 1,
-            (false, true) => -1,
-            _ => string.CompareOrdinal(left.Pre, right.Pre)
-        };
-    }
-
-    private static (int[] Numbers, string Pre) Split(string version)
-    {
-        int dash = version.IndexOf('-');
-        string core = dash < 0 ? version : version[..dash];
-        string pre = dash < 0 ? "" : version[(dash + 1)..];
-        int[] numbers = core.Split('.')
-                            .Select(part => int.TryParse(part, out int value) ? value : 0)
-                            .ToArray();
-        return (numbers, pre);
-    }
 }

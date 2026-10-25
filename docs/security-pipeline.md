@@ -47,11 +47,20 @@
 
 ### 第 3 层:清单
 
-走宿主同一套 `PluginManifestReader`,外加市场自己的三条:
+走宿主同一套 `PluginManifestReader`,外加市场自己的四条:
 
 - 清单里的 **id / 版本必须与本次上传声明的一致** —— 不一致就是"拿别人的 id 顶替上架"的形状;
+- **版本号要能被 SDK 的 `SemanticVersion` 解析**(`ManifestVersionRules`,`version` / `minHostVersion` /
+  `minSdkVersion` 三个字段都查)。SDK 的清单正则比它宽:`1.0.0-beta.01`(预发布里的数字标识符带前导零)、
+  `1.0.0-a..b`(空标识符)、超出 int 的数字段、非 ASCII 数字都过得了正则,却排不出先后 ——
+  商店按 `SemanticVersion` 排版本,它们只能永远排在最旧;`minSdkVersion` 解析不出时装载闸直接放行,
+  等于没写。正则的 `$` 还放行结尾一个换行,那会原样进对象键,一并拒掉。判 `MANIFEST_INVALID` Blocking,
+  消息写明是哪个字段、哪一段、可以改成什么。与 `vela-plugin pack` / `validate` 同一口径;
 - `apiLevel` 不得高于市场支持的上限(高了宿主也装不上,不如在门口说清楚);
 - 清单声明的入口程序集必须真的在包里。
+
+上传端点(`/api/uploads`、`/api/uploads/inspect`)在认领之前就跑同一条版本检查,不合格直接 400,
+不占隔离区。
 
 ### 第 4 层:内容启发
 
@@ -84,6 +93,8 @@ Warning  有 → NeedsReview → 仍是 Quarantined,进审核台队列
 ```
 
 审核员放行走的是**与自动放行同一个 `PublishAsync`** —— 两条路径分叉的话,迟早长出不一样的元数据。
+放行前还会用入库的版本字段再过一遍版本号规则:规则收紧之前进了隔离区、正等人复核的版本,
+现在的上传与静态检查都会拒它,人工放行不能成为绕过去的那条路 —— 这种版本只能驳回(409 并说明原因)。
 
 ## 五、目前不做的事
 

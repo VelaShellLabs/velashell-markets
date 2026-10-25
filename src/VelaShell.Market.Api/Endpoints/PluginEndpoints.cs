@@ -6,6 +6,7 @@ using VelaShell.Market.Infrastructure.Persistence;
 using VelaShell.Market.Infrastructure.Scanning;
 using VelaShell.Market.Infrastructure.Storage;
 using VelaShell.PluginSdk.Packaging;
+using VelaShell.PluginSdk.Versioning;
 
 namespace VelaShell.Market.Api.Endpoints;
 
@@ -219,7 +220,7 @@ public static class PluginEndpoints
             plugin.RatingCount,
             plugin.CreatedAt,
             plugin.UpdatedAt,
-            versions = versions.OrderByDescending(v => v.Version, SemVerComparer.Instance).Select(v => new
+            versions = versions.OrderByDescending(v => v.Version, SemanticVersion.TextComparer).Select(v => new
             {
                 v.Version,
                 v.ApiLevel,
@@ -371,6 +372,8 @@ public static class PluginEndpoints
     /// <summary>
     /// 从一个插件的已发布版本里挑出「最新的那个」:默认跳过预发布(版本号带 <c>-</c> 后缀),
     /// <paramref name="includePreRelease" /> 为真时一视同仁。一个正式版都没有时退回最新的预发布。
+    /// 排序用 SDK 的 <see cref="SemanticVersion.TextComparer" />(完整 SemVer 优先级,<c>beta.2 &lt; beta.10</c>;
+    /// 解析不出的版本当最旧,只要还有合法版本就不会被挑中)。
     /// </summary>
     /// <remarks>
     /// <para>
@@ -387,14 +390,17 @@ public static class PluginEndpoints
     /// <param name="includePreRelease">是否把预发布版本也算进来。</param>
     public static PluginVersion? SelectLatest(IEnumerable<PluginVersion> published, bool includePreRelease)
     {
-        PluginVersion[] ordered = [.. published.OrderByDescending(v => v.Version, SemVerComparer.Instance)];
+        PluginVersion[] ordered = [.. published.OrderByDescending(v => v.Version, SemanticVersion.TextComparer)];
         if (ordered.Length == 0)
         {
             return null;
         }
+        // 「正式版」= 能解析且不带预发布后缀。只看有没有 '-' 的话,解析不出的写法(如超出 int 的数字段)
+        // 会被当成正式版,压过排在它前面的合法预发布。
         return includePreRelease
             ? ordered[0]
-            : ordered.FirstOrDefault(v => !v.Version.Contains('-', StringComparison.Ordinal)) ?? ordered[0];
+            : ordered.FirstOrDefault(v => SemanticVersion.TryParse(v.Version, out SemanticVersion parsed) && !parsed.IsPreRelease)
+              ?? ordered[0];
     }
 
     /// <summary>

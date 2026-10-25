@@ -25,7 +25,8 @@ public sealed record VpxInspection(
 /// <list type="number">
 ///   <item><b>容器</b> —— 魔数、头部 CRC、载荷长度、SHA-256、签名(复用 <see cref="VpxContainer" />,与宿主同一份实现);</item>
 ///   <item><b>压缩包结构</b> —— 路径逃逸、条目数、解压总量、压缩比(解压炸弹);</item>
-///   <item><b>清单</b> —— 走宿主同一套 <see cref="PluginManifestReader" />,外加市场自己的 apiLevel 上限;</item>
+///   <item><b>清单</b> —— 走宿主同一套 <see cref="PluginManifestReader" />,版本号再按 <see cref="ManifestVersionRules" /> 收紧,
+///   外加市场自己的 apiLevel 上限;</item>
 ///   <item><b>内容启发</b> —— 可执行文件、脚本、原生库、超大文件、可疑扩展名。</item>
 /// </list>
 /// <para>
@@ -252,6 +253,8 @@ public static class VpxStaticInspector
         {
             using StreamReader reader = new(manifestEntry.Open());
             manifest = PluginManifestReader.Parse(reader.ReadToEnd());
+            // 版本号比 SDK 正则收得更紧:要能被 SemanticVersion 解析(与上传端点、vela-plugin pack 同一口径)。
+            ManifestVersionRules.Require(manifest);
         }
         catch (PluginManifestException ex)
         {
