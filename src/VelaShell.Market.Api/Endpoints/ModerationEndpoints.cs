@@ -222,6 +222,12 @@ public static class ModerationEndpoints
             // 只允许从隔离区放行。已拒的要先重新检测,已发布的不必再放行。
             return Results.Conflict(new { error = $"该版本当前状态为 {version.Status},只有隔离中的版本可以放行。" });
         }
+        if (ManifestVersionRules.FirstProblem(version.Version, version.MinHostVersion, version.MinSdkVersion) is { } versionProblem)
+        {
+            // 版本号规则收紧之前进隔离区、等人复核的版本:现在的上传与静态检查都会拒它,
+            // 人工放行不能成为绕过去的那条路。只能驳回,请作者改版本号后重传。
+            return Results.Conflict(new { error = $"{versionProblem}按现行规则这个版本不能放行,请驳回,让作者改版本号后重传。" });
+        }
         ScanReport report = version.Scan ?? new();
         report.Verdict = ScanVerdict.Passed;
         string reason = note?.Reason?.Trim() is { Length: > 0 } text ? $"已由审核员人工放行:{text}" : "已由审核员人工放行。";

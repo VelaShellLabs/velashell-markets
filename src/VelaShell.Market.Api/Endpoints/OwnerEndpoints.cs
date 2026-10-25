@@ -6,6 +6,7 @@ using VelaShell.Market.Api.Options;
 using VelaShell.Market.Domain;
 using VelaShell.Market.Infrastructure.Persistence;
 using VelaShell.Market.Infrastructure.Storage;
+using VelaShell.PluginSdk.Versioning;
 
 namespace VelaShell.Market.Api.Endpoints;
 
@@ -104,7 +105,7 @@ public static class OwnerEndpoints
         List<PluginVersion> remaining = await db.Versions
                                                 .Find(v => v.PluginId == id && v.Status == PluginVersionStatus.Published)
                                                 .ToListAsync(cancellationToken).ConfigureAwait(false);
-        PluginVersion? latest = remaining.OrderByDescending(v => v.Version, Infrastructure.Scanning.SemVerComparer.Instance).FirstOrDefault();
+        PluginVersion? latest = remaining.OrderByDescending(v => v.Version, SemanticVersion.TextComparer).FirstOrDefault();
         await db.Plugins.UpdateOneAsync(p => p.Id == id, Builders<Plugin>.Update
                                                          .Set(p => p.LatestVersion, latest?.Version)
                                                          .Set(p => p.LatestApiLevel, latest?.ApiLevel)

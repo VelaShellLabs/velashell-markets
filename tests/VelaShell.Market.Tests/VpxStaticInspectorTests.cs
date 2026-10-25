@@ -170,11 +170,41 @@ public class VpxStaticInspectorTests
     }
 
     [TestMethod]
-    public void SemVerComparer_PrereleaseSortsBelowRelease()
+    [DataRow("1.0.0-beta.01", "可改成 '1.0.0-beta.1'")]
+    [DataRow("1.0.0-a..b", "可改成 '1.0.0-a.b'")]
+    [DataRow("2147483648.0.0", "超过了")]
+    public void ManifestVersion_TheSdkRegexLetsThrough_IsBlocked(string version, string hint)
     {
-        List<string> versions = ["1.0.0", "1.0.0-beta.1", "1.2.0", "0.9.9", "1.10.0"];
-        versions.Sort(SemVerComparer.Instance);
-        Assert.AreSequenceEqual(["0.9.9", "1.0.0-beta.1", "1.0.0", "1.2.0", "1.10.0"], versions);
+        // SDK 的清单正则放行这些写法,但 SemanticVersion 解析不出:商店排不出它们的先后,在门口就拒。
+        VpxInspection result = Inspect(BuildPackage(version: version), version: version);
+
+        ScanFinding finding = result.Findings.Single(f => f.Code == "MANIFEST_INVALID");
+        Assert.AreEqual(ScanSeverity.Blocking, finding.Severity);
+        Assert.Contains($"version '{version}'", finding.Message, StringComparison.Ordinal);
+        Assert.Contains(hint, finding.Message, StringComparison.Ordinal);
+        Assert.IsNull(result.Manifest, "清单判为不合法时不该带出解析结果(发布时不会拿它写元数据)");
+    }
+
+    [TestMethod]
+    public void ManifestMinSdkVersion_ThatSemanticVersionRejects_IsBlocked()
+    {
+        // 装载闸解析不出 minSdkVersion 时会直接放行 —— 这道闸等于没写,所以同样拒。
+        string package = BuildPackage(manifestOverride: """
+            { "id": "acme.demo", "version": "1.0.0", "displayName": "Demo", "entry": "Demo.dll", "minSdkVersion": "2.1.0-rc.01" }
+            """);
+        VpxInspection result = Inspect(package);
+
+        Assert.Contains(f => f is { Code: "MANIFEST_INVALID", Severity: ScanSeverity.Blocking }
+                             && f.Message.Contains("minSdkVersion '2.1.0-rc.01'", StringComparison.Ordinal), result.Findings);
+    }
+
+    [TestMethod]
+    public void ValidPreReleaseVersion_Passes()
+    {
+        VpxInspection result = Inspect(BuildPackage(version: "1.0.0-beta.1"), version: "1.0.0-beta.1");
+
+        Assert.DoesNotContain(f => f.Severity == ScanSeverity.Blocking, result.Findings);
+        Assert.AreEqual("1.0.0-beta.1", result.Manifest?.Version);
     }
 
     [TestMethod]
