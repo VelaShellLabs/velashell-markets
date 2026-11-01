@@ -29,13 +29,14 @@ Dockerfile。改了后端代码不重跑脚本,起来的还是旧镜像。
 镜像里的新,而 `rollForward` 只能往前滚不能往回,于是 `docker compose build` 直接失败。
 当时的权宜之计是在 Dockerfile 里把指定版本的 SDK 与运行时叠加进镜像。
 
-改用 SDK 容器发布之后这个问题自然消失:**编译发生在宿主机上,用的就是 `global.json` 指定的那个 SDK**,
-镜像只需要提供运行时。所以现在只剩一条约束:
+改用 SDK 容器发布之后这个问题自然消失:**编译发生在宿主机上,用的就是本机装的 SDK**
+(仓库现在也不钉 SDK、没有 `global.json`,用本机最新的一版 11.0),镜像只需要提供运行时。所以现在只剩一条约束:
 
 > ⚠️ `ContainerBaseImage` 里的运行时**不能比编译用的 SDK 旧**。
 > 运行时只能向前滚补丁,拿旧运行时跑新 SDK 编出来的程序集会直接"找不到框架"。
-> 目前 `mcr.microsoft.com/dotnet/aspnet:11.0` 里是 `11.0.0-rc.1.26425.128`,与 `global.json` 同版。
-> 换基础镜像前先 `docker run --rm <镜像> ls /usr/share/dotnet/shared/Microsoft.AspNetCore.App` 确认一眼。
+> 仓库不钉 SDK,所以**升级本机 SDK 或换基础镜像之后**,都先
+> `docker run --rm <镜像> ls /usr/share/dotnet/shared/Microsoft.AspNetCore.App` 确认一眼:
+> 镜像里的运行时不能比 `dotnet --list-sdks` 里最新那版 SDK 自带的旧。
 
 ## 两个容易踩的默认值
 
