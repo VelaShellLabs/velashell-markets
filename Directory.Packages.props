@@ -14,7 +14,7 @@
   </ItemGroup>
   <ItemGroup>
     <!-- 插件包容器与清单:与 VelaShell 宿主同一份实现。 -->
-    <PackageVersion Include="VelaShell.PluginSdk" Version="2.1.6" />
+    <PackageVersion Include="VelaShell.PluginSdk" Version="2.1.7" />
   </ItemGroup>
   <ItemGroup>
     <PackageVersion Include="MongoDB.Driver" Version="3.11.0" />
