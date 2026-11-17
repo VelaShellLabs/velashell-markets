@@ -1,9 +1,10 @@
 import { App, Button, Drawer, Empty, Form, Input, Skeleton, Space, Table, Tooltip, Typography } from 'antd';
-import { EditOutlined, ReloadOutlined } from '@ant-design/icons';
-import { getMyPlugins, updatePlugin } from '@/services/me';
+import { EditOutlined, ReloadOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
+import { getMyPlugins, getTrustedPublishingSettings, updatePlugin } from '@/services/me';
 import { history, useRequest } from '@umijs/max';
 
 import { Chip, PageShell } from '@/components';
+import TrustedPublishersDrawer from './components/TrustedPublishersDrawer';
 import { formatDateTime } from '@/utils/format';
 import { keepResult } from '@/utils/request';
 import { useState } from 'react';
@@ -21,6 +22,13 @@ export default function OwnerPage() {
 
   const { data, loading, refresh } = useRequest(getMyPlugins, { formatResult: keepResult, onError: () => undefined });
   const items = data ?? [];
+
+  // 商店没启用可信发布时整块不露 —— 给一个点进去只会 404 的入口不如不给。
+  const { data: trustedSettings } = useRequest(getTrustedPublishingSettings, { formatResult: keepResult, onError: () => undefined });
+  const trustedEnabled = !!trustedSettings?.enabled;
+  // 存 id 而不是对象:登记 / 移除后列表刷新,抽屉要跟着拿到新的那份。
+  const [trustedId, setTrustedId] = useState<string | null>(null);
+  const trustedPlugin = items.find((p) => p.id === trustedId) ?? null;
 
   const { run: save, loading: saving } = useRequest((values: MeAPI.PluginPatch) => updatePlugin(editing!.id, values), {
     manual: true,
@@ -62,49 +70,72 @@ export default function OwnerPage() {
         </Empty>
       ) : (
         <Table<MeAPI.MyPlugin>
-            rowKey="id"
-            dataSource={items}
-            loading={loading}
-            pagination={false}
-            scroll={{ x: 720 }}
-            columns={[
-              {
-                title: '插件',
-                render: (_, row) => (
-                  <Space orientation="vertical" size={0}>
-                    <a onClick={() => history.push(`/plugins/${row.id}`)}>{row.displayName}</a>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      {row.id}
-                    </Typography.Text>
-                  </Space>
+          rowKey="id"
+          dataSource={items}
+          loading={loading}
+          pagination={false}
+          scroll={{ x: 720 }}
+          columns={[
+            {
+              title: '插件',
+              render: (_, row) => (
+                <Space orientation="vertical" size={0}>
+                  <a onClick={() => history.push(`/plugins/${row.id}`)}>{row.displayName}</a>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    {row.id}
+                  </Typography.Text>
+                </Space>
+              ),
+            },
+            { title: '最新版本', dataIndex: 'latestVersion', width: 110, render: (value) => (value ? <span className="mono">v{value}</span> : <Chip>未发布</Chip>) },
+            { title: '下载', dataIndex: 'downloads', width: 90 },
+            { title: '评分', width: 120, render: (_, row) => (row.ratingCount > 0 ? `${row.ratingAverage.toFixed(1)} (${row.ratingCount})` : '—') },
+            {
+              title: '状态',
+              width: 110,
+              // 下架原因挂在标签上:作者最想知道的就是"为什么被下了"。
+              render: (_, row) =>
+                row.isUnlisted ? (
+                  <Tooltip title={row.unlistedReason}>
+                    <Chip tone="danger">已下架</Chip>
+                  </Tooltip>
+                ) : (
+                  <Chip tone="ok">正常</Chip>
                 ),
-              },
-              { title: '最新版本', dataIndex: 'latestVersion', width: 110, render: (value) => (value ? <span className="mono">v{value}</span> : <Chip>未发布</Chip>) },
-              { title: '下载', dataIndex: 'downloads', width: 90 },
-              { title: '评分', width: 120, render: (_, row) => (row.ratingCount > 0 ? `${row.ratingAverage.toFixed(1)} (${row.ratingCount})` : '—') },
-              {
-                title: '状态',
-                width: 110,
-                // 下架原因挂在标签上:作者最想知道的就是"为什么被下了"。
-                render: (_, row) =>
-                  row.isUnlisted ? (
-                    <Tooltip title={row.unlistedReason}>
-                      <Chip tone="danger">已下架</Chip>
-                    </Tooltip>
-                  ) : (
-                    <Chip tone="ok">正常</Chip>
-                  ),
-              },
-              { title: '更新于', dataIndex: 'updatedAt', width: 180, render: formatDateTime },
-              {
-                title: '',
-                width: 90,
-                render: (_, row) => (
+            },
+            ...(trustedEnabled
+              ? [
+                  {
+                    title: '可信发布',
+                    width: 110,
+                    render: (_: unknown, row: MeAPI.MyPlugin) =>
+                      row.trustedPublishers?.length ? (
+                        <Tooltip title={row.trustedPublishers.map((t) => `${t.repository} · ${t.workflow}${t.environment ? ` · ${t.environment}` : ''}`).join('\n')}>
+                          <Chip tone="ok">{row.trustedPublishers.length} 条</Chip>
+                        </Tooltip>
+                      ) : (
+                        <Chip>未登记</Chip>
+                      ),
+                  },
+                ]
+              : []),
+            { title: '更新于', dataIndex: 'updatedAt', width: 180, render: formatDateTime },
+            {
+              title: '',
+              width: trustedEnabled ? 200 : 90,
+              render: (_, row) => (
+                <Space size={0}>
                   <Button type="link" icon={<EditOutlined />} onClick={() => openEditor(row)}>
                     编辑
                   </Button>
-                ),
-              },
+                  {trustedEnabled && (
+                    <Button type="link" icon={<SafetyCertificateOutlined />} onClick={() => setTrustedId(row.id)}>
+                      可信发布
+                    </Button>
+                  )}
+                </Space>
+              ),
+            },
           ]}
         />
       )}
@@ -132,6 +163,8 @@ export default function OwnerPage() {
           </Form.Item>
         </Form>
       </Drawer>
+
+      {trustedSettings && <TrustedPublishersDrawer plugin={trustedPlugin} allPlugins={items} settings={trustedSettings} onClose={() => setTrustedId(null)} onChanged={refresh} />}
     </PageShell>
   );
 }

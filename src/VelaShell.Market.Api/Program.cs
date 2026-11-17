@@ -1,6 +1,8 @@
 using Amazon.Runtime;
 using Amazon.S3;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
@@ -28,6 +30,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 });
 builder.Services.Configure<ClamAvOptions>(builder.Configuration.GetSection(ClamAvOptions.SectionName));
 builder.Services.Configure<MarketAuthOptions>(builder.Configuration.GetSection(MarketAuthOptions.SectionName));
+builder.Services.Configure<GitHubOidcOptions>(builder.Configuration.GetSection(GitHubOidcOptions.SectionName));
 
 // ---- 身份认证:资源服务器姿态 ------------------------------------------------
 // 市场自己不发令牌,只验统一认证服务(独立仓库 velashell-identity)签发的 JWT:
@@ -59,8 +62,15 @@ if (!Uri.TryCreate(internalAuthority, UriKind.Absolute, out Uri? parsedAuthority
         "它应该形如 http://identity:8080(API 在容器网络里访问认证服务的地址)。");
 }
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-       .AddJwtBearer(options =>
+GitHubOidcOptions gitHubOidc = builder.Configuration.GetSection(GitHubOidcOptions.SectionName).Get<GitHubOidcOptions>() ?? new();
+if (gitHubOidc.Enabled && string.IsNullOrWhiteSpace(gitHubOidc.Audience))
+{
+    // 不校验受众的话,任何仓库为任何服务要来的 GitHub 令牌都能拿来这里上传。
+    throw new InvalidOperationException("GitHubOidc:Enabled 为 true 时必须配置 GitHubOidc:Audience。");
+}
+
+AuthenticationBuilder authentication = builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme);
+authentication.AddJwtBearer(options =>
        {
            options.Authority = auth.Issuer;
            options.Audience = auth.Audience;
@@ -87,7 +97,48 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                RoleClaimType = "role"
            };
        });
-builder.Services.AddAuthorizationBuilder()
+
+// ---- 可信发布:GitHub Actions 的 OIDC 令牌 ------------------------------------
+// 第二套方案,**不是默认方案**:默认策略(RequireAuthorization())只认上面那套统一认证服务的令牌,
+// 这一套只挂在 /api/uploads/trusted 一个端点上(MarketPolicies.TrustedPublisher)。
+// 令牌由 GitHub 为一次工作流运行签发、几分钟即过期;仓库、工作流、环境等声明决定它能替谁发版,
+// 匹配规则见 TrustedPublishing.Match。
+if (gitHubOidc.Enabled)
+{
+    authentication.AddJwtBearer(GitHubOidcOptions.Scheme, options =>
+    {
+        options.Authority = gitHubOidc.Issuer;
+        options.Audience = gitHubOidc.Audience;
+        options.RequireHttpsMetadata = true;
+        // 保留原始声明名:repository / job_workflow_ref 这些不在映射表里,但 sub 会被改写,统一不改省得两套口径。
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = gitHubOidc.Issuer,
+            ValidateAudience = true,
+            ValidAudience = gitHubOidc.Audience,
+            ValidateLifetime = true,
+            RequireExpirationTime = true,
+            ClockSkew = TimeSpan.FromSeconds(30)
+        };
+    });
+}
+
+builder.Services.AddHttpClient<GitHubRepositoryResolver>(GitHubRepositoryResolver.ClientName, client =>
+{
+    // GitHub API 拒绝没有 User-Agent 的请求。
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("VelaShell-Market");
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
+
+AuthorizationBuilder authorization = builder.Services.AddAuthorizationBuilder();
+if (gitHubOidc.Enabled)
+{
+    authorization.AddPolicy(MarketPolicies.TrustedPublisher, policy =>
+        policy.AddAuthenticationSchemes(GitHubOidcOptions.Scheme).RequireAuthenticatedUser());
+}
+authorization
     .AddPolicy(MarketPolicies.Moderator, policy =>
         policy.RequireAssertion(context =>
             // 主体的取法必须与 PrincipalExtensions.Subject() 完全一致:两处分叉的话,
@@ -166,6 +217,11 @@ app.MapStatsEndpoints();
 app.MapPluginEndpoints();
 app.MapOwnerEndpoints();
 app.MapUploadEndpoints();
+app.MapTrustedPublisherEndpoints();
+if (gitHubOidc.Enabled)
+{
+    app.MapTrustedUploadEndpoint();
+}
 app.MapReviewEndpoints();
 app.MapModerationEndpoints();
 
