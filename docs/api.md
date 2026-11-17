@@ -38,6 +38,26 @@
 | DELETE | `/api/plugins/{id}/reviews` | 删除我的评价 |
 | PUT | `/api/plugins/{id}/reviews/{reviewId}/reply` | 作者公开回复一条评价,`{ "body": "…" }`。仅拥有者 |
 | DELETE | `/api/plugins/{id}/reviews/{reviewId}/reply` | 撤下作者回复。仅拥有者 |
+| GET | `/api/me/trusted-publishing` | 商店的可信发布设置:`enabled` / `audience` / `uploadPath`。「我的插件」页据此决定露不露登记入口 |
+| POST | `/api/me/trusted-publishers` | 给自己的一个或多个插件登记可信发布者,`{ "pluginIds": [...], "repository": "owner/repo", "workflow": "release.yml", "environment": "market" }`(`environment` 可选)。商店向 GitHub 查出仓库的数字 id 存下;返回 `added` / `skipped`(重复或已达上限)。未启用可信发布时 404 |
+| DELETE | `/api/plugins/{id}/trusted-publishers/{publisherId}` | 移除一条可信发布者。仅拥有者 |
+
+## 可信发布(GitHub Actions OIDC 令牌,`GitHubOidc:Enabled=true` 时才挂载)
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| POST | `/api/uploads/trusted` | CI 上传已有插件的新版本(multipart:`file` + 可选 `releaseNotes`)。请求头带 GitHub Actions 签发的 OIDC 令牌,`aud` 须为 `GitHubOidc:Audience`。插件不存在 404(首个版本须登录手动上传),没有匹配的可信发布者 403,版本已发布 409,其余与 `/api/uploads` 相同:`202 Accepted` 进隔离区 |
+
+匹配规则与安全边界见 [security-pipeline.md](security-pipeline.md) 的「可信发布」一节。CI 里申请令牌:
+
+```bash
+token=$(curl -sSf -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+  "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=velashell-market" | jq -r .value)
+curl -sS --fail-with-body -H "Authorization: Bearer $token" -F "file=@my.plugin-1.2.0.vpx" \
+  https://market.example.com/api/uploads/trusted
+```
+
+工作流需要 `permissions: id-token: write`。
 
 ## 审核员(`Auth:ModeratorSubjects`)
 
@@ -66,7 +86,7 @@
   `1.0.0-a..b` 这类会被拒,报错里给出改法)。详情页的版本列表、`LatestVersion` 与 `/api/plugins/latest`
   按完整 SemVer 优先级排序(`beta.2 < beta.10`);规则收紧之前就已发布、如今解析不出的版本排在最旧,
   只要还有合法版本就不会被挑成「最新」。「正式版」指能解析且不带预发布后缀的版本。
-- 上传是 `202 Accepted` 而不是 `201`:那一刻包只是进了隔离区,还不是"已发布"。
+- 上传是 `202 Accepted` 而不是 `201`:那一刻包只是进了隔离区,还不是"已发布"。可信发布同理。
 - 下载每次签 URL 即 `$inc` 计数(原子),目前**不做去重**。
 - 评价的 Markdown 与插件描述一样,**只存原文**,渲染在读取时做并经白名单清洗。
 - 详情页上的检测结论是**删过的**:只给判定、起止时间与引擎版本,**不下发 findings 原文** ——

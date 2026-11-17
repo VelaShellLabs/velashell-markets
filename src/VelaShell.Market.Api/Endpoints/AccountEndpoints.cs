@@ -53,7 +53,16 @@ public static class AccountEndpoints
             p.RatingCount,
             p.IsUnlisted,
             p.UnlistedReason,
-            p.UpdatedAt
+            p.UpdatedAt,
+            trustedPublishers = p.TrustedPublishers.Select(t => new
+            {
+                id = t.PublisherId,
+                t.Provider,
+                t.Repository,
+                t.Workflow,
+                t.Environment,
+                t.AddedAt
+            })
         }));
     }
 }

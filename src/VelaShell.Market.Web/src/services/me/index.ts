@@ -14,3 +14,18 @@ export async function getMyPlugins() {
 export async function updatePlugin(id: string, data: MeAPI.PluginPatch) {
   return request(`/api/plugins/${id}`, { method: 'PUT', data });
 }
+
+/** 商店是否启用了可信发布,以及 CI 要用的 audience。 */
+export async function getTrustedPublishingSettings() {
+  return request<MeAPI.TrustedPublishingSettings>('/api/me/trusted-publishing', { method: 'GET' });
+}
+
+/** 给一个或多个自己的插件登记可信发布者。 */
+export async function addTrustedPublisher(data: MeAPI.TrustedPublisherRequest) {
+  return request<MeAPI.TrustedPublisherResult>('/api/me/trusted-publishers', { method: 'POST', data });
+}
+
+/** 移除一条可信发布者。 */
+export async function removeTrustedPublisher(pluginId: string, publisherId: string) {
+  return request(`/api/plugins/${pluginId}/trusted-publishers/${publisherId}`, { method: 'DELETE' });
+}

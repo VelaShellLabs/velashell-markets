@@ -84,6 +84,7 @@ docker compose up -d --build
 | `MODERATOR_SUBJECT` | 留空则审核台无人可进,待复核的包会一直停在隔离区 |
 | `BOOTSTRAP_PASSWORD` | 建完首个账号后清空,并到页面上改掉初始口令 |
 | `SEED_DEMO_DATA` | 保持 `false` |
+| `TRUSTED_PUBLISHING` | 可选。`true` 时开放可信发布(GitHub Actions 凭 OIDC 令牌推新版本,见 `api.md`)。API 容器需能出网访问 `token.actions.githubusercontent.com`(验令牌)与 `api.github.com`(登记时查仓库 id);`TRUSTED_PUBLISHING_AUDIENCE` 必须与 CI 申请令牌时的 audience 一致 |
 
 域名统一到 HTTPS 之后,compose 里 api 服务的 `Auth__Authority` 可以直接删掉 ——
 它存在的唯一理由是"浏览器看到的地址与容器内能访问的地址不是同一个",见

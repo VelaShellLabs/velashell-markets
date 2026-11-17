@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver;
+using VelaShell.Market.Api.Options;
 using VelaShell.Market.Api.Services;
 using VelaShell.Market.Domain;
 using VelaShell.Market.Infrastructure.Persistence;
@@ -37,6 +38,20 @@ public static class UploadEndpoints
 
         group.MapGet("/mine", MineAsync)
              .WithSummary("我上传的版本(含仍在隔离区与被拒的,带完整检测报告)。");
+    }
+
+    /// <summary>
+    /// 挂载可信发布的上传端点。**不放进上面那个组**:那个组走默认策略(统一认证服务的令牌),
+    /// 这个端点只认 GitHub Actions 的 OIDC 令牌 —— 两种令牌各自只能进自己的门,
+    /// GitHub 令牌拿去调 <c>/api/uploads</c>、<c>/api/me</c> 之类一律 401,反之亦然。
+    /// </summary>
+    public static void MapTrustedUploadEndpoint(this IEndpointRouteBuilder app)
+    {
+        app.MapPost("/api/uploads/trusted", TrustedUploadAsync)
+           .RequireAuthorization(MarketPolicies.TrustedPublisher)
+           .DisableAntiforgery()
+           .WithTags("Uploads")
+           .WithSummary("可信发布:GitHub Actions 凭 OIDC 令牌上传已有插件的新版本。之后与手动上传一样进隔离区检测。");
     }
 
     /// <summary>
@@ -177,6 +192,61 @@ public static class UploadEndpoints
     }
 
 
+    /// <summary>读出来的包:清单 + 容器头。</summary>
+    private sealed record ReceivedPackage(PluginManifest Manifest, VpxPackageInfo Info);
+
+    /// <summary>
+    /// 把上传的文件落到本地临时文件并读出清单。容器读取要 Seek,而上传流是只进不回的。
+    /// 只做"认领"所需的最小解析:容器合法性 + 清单。这一步失败就没必要占用隔离区空间了。
+    /// 手动上传与可信发布共用这一步 —— 两条入口对包的要求必须一字不差。
+    /// </summary>
+    private static async Task<(ReceivedPackage? Package, IResult? Error)> ReceiveAsync(IFormFile file, string temp, CancellationToken cancellationToken)
+    {
+        if (file.Length == 0)
+        {
+            return (null, Results.BadRequest(new { error = "文件为空。" }));
+        }
+        await using (FileStream local = File.Create(temp))
+        {
+            await file.CopyToAsync(local, cancellationToken).ConfigureAwait(false);
+        }
+        try
+        {
+            await using Stream payload = VpxContainer.OpenPayload(temp, out VpxPackageInfo info);
+            using var archive = new System.IO.Compression.ZipArchive(payload, System.IO.Compression.ZipArchiveMode.Read);
+            System.IO.Compression.ZipArchiveEntry? entry = archive.GetEntry(PluginManifestReader.FileName);
+            if (entry is null)
+            {
+                return (null, Results.BadRequest(new { error = $"包内没有 {PluginManifestReader.FileName}。" }));
+            }
+            using StreamReader reader = new(entry.Open());
+            PluginManifest manifest = PluginManifestReader.Parse(await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false));
+            // 版本号按 SemanticVersion 收紧(与静态检查、vela-plugin pack 同一口径),认领之前就说清楚。
+            ManifestVersionRules.Require(manifest);
+            return (new(manifest, info), null);
+        }
+        catch (VpxFormatException ex)
+        {
+            return (null, Results.BadRequest(new { error = ex.Message }));
+        }
+        catch (PluginManifestException ex)
+        {
+            return (null, Results.BadRequest(new { error = ex.Message }));
+        }
+    }
+
+    private static void DeleteTemp(string temp)
+    {
+        try
+        {
+            File.Delete(temp);
+        }
+        catch (IOException)
+        {
+            // 临时文件删不掉不影响上传结果。
+        }
+    }
+
     /// <summary>
     /// 上传。这个方法只做三件事:**先读清单认出这是谁的什么版本 → 落隔离桶 → 入队**。
     /// 真正的检测一律在后台流水线里做 —— 上传请求不该被一次全包病毒扫描拖成几分钟的长连接。
@@ -196,45 +266,15 @@ public static class UploadEndpoints
         ILogger logger = loggerFactory.CreateLogger("Upload");
         string subject = user.Subject();
 
-        if (file.Length == 0)
-        {
-            return Results.BadRequest(new { error = "文件为空。" });
-        }
-
-        // 先把包落到本地临时文件:容器读取要 Seek,而上传流是只进不回的。
         string temp = Path.Combine(Path.GetTempPath(), $"vpx-upload-{Guid.NewGuid():N}.vpx");
         try
         {
-            await using (FileStream local = File.Create(temp))
+            (ReceivedPackage? package, IResult? error) = await ReceiveAsync(file, temp, cancellationToken).ConfigureAwait(false);
+            if (package is null)
             {
-                await file.CopyToAsync(local, cancellationToken).ConfigureAwait(false);
+                return error!;
             }
-
-            // 只做"认领"所需的最小解析:容器合法性 + 清单。这一步失败就没必要占用隔离区空间了。
-            PluginManifest manifest;
-            VpxPackageInfo info;
-            try
-            {
-                await using Stream payload = VpxContainer.OpenPayload(temp, out info);
-                using var archive = new System.IO.Compression.ZipArchive(payload, System.IO.Compression.ZipArchiveMode.Read);
-                System.IO.Compression.ZipArchiveEntry? entry = archive.GetEntry(PluginManifestReader.FileName);
-                if (entry is null)
-                {
-                    return Results.BadRequest(new { error = $"包内没有 {PluginManifestReader.FileName}。" });
-                }
-                using StreamReader reader = new(entry.Open());
-                manifest = PluginManifestReader.Parse(await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false));
-                // 版本号按 SemanticVersion 收紧(与静态检查、vela-plugin pack 同一口径),认领之前就说清楚。
-                ManifestVersionRules.Require(manifest);
-            }
-            catch (VpxFormatException ex)
-            {
-                return Results.BadRequest(new { error = ex.Message });
-            }
-            catch (PluginManifestException ex)
-            {
-                return Results.BadRequest(new { error = ex.Message });
-            }
+            PluginManifest manifest = package.Manifest;
 
             // 归属:插件 id 一旦被谁认领,后续版本只能由同一个人发。
             Plugin? plugin = await db.Plugins.Find(p => p.Id == manifest.Id).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
@@ -284,78 +324,157 @@ public static class UploadEndpoints
                 await db.Plugins.UpdateOneAsync(p => p.Id == plugin.Id, update, cancellationToken: cancellationToken).ConfigureAwait(false);
             }
 
-            // 同版本重复上传:已发布的一律拒绝(改内容不改版本号会让已装用户永远拿不到修复);
-            // 还在隔离区或被拒的允许覆盖重传。
-            PluginVersion? existing = await db.Versions
-                                              .Find(v => v.PluginId == manifest.Id && v.Version == manifest.Version)
-                                              .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
-            if (existing is { Status: PluginVersionStatus.Published })
-            {
-                return Results.Conflict(new { error = $"{manifest.Id} 的 {manifest.Version} 已发布。请提升版本号后再上传。" });
-            }
-
-            string objectKey = PackageStorage.BuildObjectKey(manifest.Id, manifest.Version);
-            string fileSha;
-            await using (FileStream local = File.OpenRead(temp))
-            {
-                fileSha = VpxStaticInspector.ComputeFileSha256(local);
-            }
-            await using (FileStream local = File.OpenRead(temp))
-            {
-                await storage.PutQuarantineAsync(objectKey, local, cancellationToken).ConfigureAwait(false);
-            }
-
-            var version = new PluginVersion
-            {
-                Id = existing?.Id ?? MongoDB.Bson.ObjectId.GenerateNewId(),
-                PluginId = manifest.Id,
-                Version = manifest.Version,
-                Status = PluginVersionStatus.Quarantined,
-                ApiLevel = manifest.ApiLevel,
-                MinHostVersion = manifest.MinHostVersion,
-                MinSdkVersion = manifest.MinSdkVersion,
-                HostMode = manifest.HostMode.ToString(),
-                IdlePolicy = manifest.IdlePolicy.ToString(),
-                Entry = manifest.Entry,
-                ActivationEvents = ManifestProjection.ToActivationEvents(manifest),
-                Contributes = ManifestProjection.ToContributions(manifest),
-                // 同一个版本重传(还在隔离区或被拒后修包重来)时留空,沿用上一次写的版本说明。
-                // 被拒重传往往只是换个包,没道理逼作者把版本说明再抄一遍;新版本没有"原有的",落空串。
-                ReleaseNotesMarkdown = string.IsNullOrWhiteSpace(releaseNotes) ? existing?.ReleaseNotesMarkdown ?? "" : releaseNotes,
-                PackageSize = file.Length,
-                PayloadSha256 = info.PayloadSha256,
-                FileSha256 = fileSha,
-                SignatureState = VpxContainer.VerifySignature(info).ToString(),
-                SignaturePublicKey = info.Signature?.PublicKey,
-                ObjectKey = objectKey,
-                UploadedBySubject = subject,
-                UploadedAt = DateTime.UtcNow,
-                Scan = new() { Verdict = ScanVerdict.Pending }
-            };
-            await db.Versions.ReplaceOneAsync(v => v.Id == version.Id, version,
-                new ReplaceOptions { IsUpsert = true }, cancellationToken).ConfigureAwait(false);
-
-            queue.Enqueue(version.Id);
-            logger.LogInformation("{PluginId} {Version} accepted into quarantine by {Subject}.", manifest.Id, manifest.Version, subject);
-            return Results.Accepted($"/api/uploads/mine", new
-            {
-                pluginId = manifest.Id,
-                version = manifest.Version,
-                status = version.Status.ToString(),
-                message = "包已进入隔离区,检测通过后会自动发布。可在「我的上传」里查看检测报告。"
-            });
+            return await QuarantineAsync(package, temp, file.Length, releaseNotes, subject, publishedVia: null,
+                db, storage, queue, logger, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
-            try
-            {
-                File.Delete(temp);
-            }
-            catch (IOException)
-            {
-                // 临时文件删不掉不影响上传结果。
-            }
+            DeleteTemp(temp);
         }
+    }
+
+    /// <summary>
+    /// 可信发布:GitHub Actions 拿 OIDC 令牌来上传。
+    ///
+    /// 与手动上传的差别**只在「谁能交包」**:不认领新 id(插件必须已存在、由拥有者登记过可信发布者),
+    /// 不改插件页文案;之后落隔离桶、入队、检测、发布,走的是与手动上传完全相同的 <see cref="QuarantineAsync" />。
+    /// 版本记在拥有者名下,另把令牌来源写进 <see cref="PluginVersion.PublishedVia" /> 备查。
+    /// </summary>
+    private static async Task<IResult> TrustedUploadAsync(
+        IFormFile file,
+        [FromForm] string? releaseNotes,
+        ClaimsPrincipal user,
+        MarketDbContext db,
+        PackageStorage storage,
+        ScanQueue queue,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
+    {
+        ILogger logger = loggerFactory.CreateLogger("TrustedUpload");
+        GitHubOidcClaims? claims = GitHubOidcClaims.From(user);
+        if (claims is null)
+        {
+            return Results.Problem(statusCode: StatusCodes.Status403Forbidden,
+                detail: "令牌缺少 repository / repository_id / repository_owner_id / job_workflow_ref 声明,不是 GitHub Actions 签发的工作流令牌。");
+        }
+
+        string temp = Path.Combine(Path.GetTempPath(), $"vpx-trusted-{Guid.NewGuid():N}.vpx");
+        try
+        {
+            (ReceivedPackage? package, IResult? error) = await ReceiveAsync(file, temp, cancellationToken).ConfigureAwait(false);
+            if (package is null)
+            {
+                return error!;
+            }
+            PluginManifest manifest = package.Manifest;
+
+            Plugin? plugin = await db.Plugins.Find(p => p.Id == manifest.Id).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+            if (plugin is null)
+            {
+                // 认领新 id 必须是一个登录的人做的决定 —— 否则谁先跑通 CI 谁就占走一个 id。
+                return Results.NotFound(new
+                {
+                    error = $"商店里还没有插件 '{manifest.Id}'。可信发布只能给已有插件发新版本:请先登录商店手动上传首个版本,再在「我的插件」里登记可信发布者。"
+                });
+            }
+            TrustedPublisher? match = TrustedPublishing.Match(plugin.TrustedPublishers, claims);
+            if (match is null)
+            {
+                logger.LogWarning("Trusted upload of {PluginId} {Version} refused: no publisher matches {Source} (environment {Environment}).",
+                    manifest.Id, manifest.Version, claims.Describe(), claims.Environment ?? "(none)");
+                return Results.Problem(statusCode: StatusCodes.Status403Forbidden,
+                    detail: $"插件 '{manifest.Id}' 没有登记与之匹配的可信发布者:仓库 {claims.Repository},工作流 {claims.JobWorkflowRef},"
+                            + $"环境 {claims.Environment ?? "(无)"}。请插件拥有者在商店「我的插件」里登记。");
+            }
+
+            logger.LogInformation("Trusted upload of {PluginId} {Version} via {Source} (publisher {PublisherId}).",
+                manifest.Id, manifest.Version, claims.Describe(), match.PublisherId);
+            return await QuarantineAsync(package, temp, file.Length, releaseNotes, plugin.OwnerSubject, claims.Describe(),
+                db, storage, queue, logger, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            DeleteTemp(temp);
+        }
+    }
+
+    /// <summary>落隔离桶、写版本记录、入队。手动上传与可信发布共用。</summary>
+    private static async Task<IResult> QuarantineAsync(
+        ReceivedPackage package,
+        string temp,
+        long packageSize,
+        string? releaseNotes,
+        string uploadedBySubject,
+        string? publishedVia,
+        MarketDbContext db,
+        PackageStorage storage,
+        ScanQueue queue,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        (PluginManifest manifest, VpxPackageInfo info) = package;
+
+        // 同版本重复上传:已发布的一律拒绝(改内容不改版本号会让已装用户永远拿不到修复);
+        // 还在隔离区或被拒的允许覆盖重传。
+        PluginVersion? existing = await db.Versions
+                                          .Find(v => v.PluginId == manifest.Id && v.Version == manifest.Version)
+                                          .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        if (existing is { Status: PluginVersionStatus.Published })
+        {
+            return Results.Conflict(new { error = $"{manifest.Id} 的 {manifest.Version} 已发布。请提升版本号后再上传。" });
+        }
+
+        string objectKey = PackageStorage.BuildObjectKey(manifest.Id, manifest.Version);
+        string fileSha;
+        await using (FileStream local = File.OpenRead(temp))
+        {
+            fileSha = VpxStaticInspector.ComputeFileSha256(local);
+        }
+        await using (FileStream local = File.OpenRead(temp))
+        {
+            await storage.PutQuarantineAsync(objectKey, local, cancellationToken).ConfigureAwait(false);
+        }
+
+        var version = new PluginVersion
+        {
+            Id = existing?.Id ?? MongoDB.Bson.ObjectId.GenerateNewId(),
+            PluginId = manifest.Id,
+            Version = manifest.Version,
+            Status = PluginVersionStatus.Quarantined,
+            ApiLevel = manifest.ApiLevel,
+            MinHostVersion = manifest.MinHostVersion,
+            MinSdkVersion = manifest.MinSdkVersion,
+            HostMode = manifest.HostMode.ToString(),
+            IdlePolicy = manifest.IdlePolicy.ToString(),
+            Entry = manifest.Entry,
+            ActivationEvents = ManifestProjection.ToActivationEvents(manifest),
+            Contributes = ManifestProjection.ToContributions(manifest),
+            // 同一个版本重传(还在隔离区或被拒后修包重来)时留空,沿用上一次写的版本说明。
+            // 被拒重传往往只是换个包,没道理逼作者把版本说明再抄一遍;新版本没有"原有的",落空串。
+            ReleaseNotesMarkdown = string.IsNullOrWhiteSpace(releaseNotes) ? existing?.ReleaseNotesMarkdown ?? "" : releaseNotes,
+            PackageSize = packageSize,
+            PayloadSha256 = info.PayloadSha256,
+            FileSha256 = fileSha,
+            SignatureState = VpxContainer.VerifySignature(info).ToString(),
+            SignaturePublicKey = info.Signature?.PublicKey,
+            ObjectKey = objectKey,
+            UploadedBySubject = uploadedBySubject,
+            PublishedVia = publishedVia,
+            UploadedAt = DateTime.UtcNow,
+            Scan = new() { Verdict = ScanVerdict.Pending }
+        };
+        await db.Versions.ReplaceOneAsync(v => v.Id == version.Id, version,
+            new ReplaceOptions { IsUpsert = true }, cancellationToken).ConfigureAwait(false);
+
+        queue.Enqueue(version.Id);
+        logger.LogInformation("{PluginId} {Version} accepted into quarantine for {Subject}.", manifest.Id, manifest.Version, uploadedBySubject);
+        return Results.Accepted($"/api/uploads/mine", new
+        {
+            pluginId = manifest.Id,
+            version = manifest.Version,
+            status = version.Status.ToString(),
+            message = "包已进入隔离区,检测通过后会自动发布。可在「我的上传」里查看检测报告。"
+        });
     }
 
     private static async Task<IResult> MineAsync(ClaimsPrincipal user, MarketDbContext db, CancellationToken cancellationToken)
@@ -374,6 +493,7 @@ public static class UploadEndpoints
             v.UploadedAt,
             v.PublishedAt,
             v.PackageSize,
+            v.PublishedVia,
             signature = v.SignatureState,
             scan = v.Scan is null
                 ? null

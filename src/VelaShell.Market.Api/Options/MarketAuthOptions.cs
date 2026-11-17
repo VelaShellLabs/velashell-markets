@@ -5,6 +5,9 @@ public static class MarketPolicies
 {
     /// <summary>审核员:能看隔离区、放行/驳回待复核的包、下架插件与隐藏评价。</summary>
     public const string Moderator = "market:moderator";
+
+    /// <summary>可信发布:只认 GitHub Actions 的 OIDC 令牌(<see cref="GitHubOidcOptions.Scheme" />)。</summary>
+    public const string TrustedPublisher = "market:trusted-publisher";
 }
 
 /// <summary>

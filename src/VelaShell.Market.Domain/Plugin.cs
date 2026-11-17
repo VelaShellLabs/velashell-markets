@@ -96,6 +96,12 @@ public sealed class Plugin
     /// <summary>描述被移除的时间(UTC)。</summary>
     public DateTime? DescriptionRemovedAt { get; set; }
 
+    /// <summary>
+    /// 可信发布者:允许哪些 CI 工作流免密钥替拥有者上传新版本。为空表示只能登录后手动上传。
+    /// 上传后照样进隔离区、过全部检测,这里放宽的只是「谁能把包交进来」。
+    /// </summary>
+    public List<TrustedPublisher> TrustedPublishers { get; set; } = [];
+
     /// <summary>创建时间(UTC)。</summary>
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -189,8 +195,14 @@ public sealed class PluginVersion
     /// <summary>对象存储里的键(隔离期与发布后是**不同桶里的同一个键**)。</summary>
     public required string ObjectKey { get; set; }
 
-    /// <summary>上传者身份主体。</summary>
+    /// <summary>上传者身份主体。经可信发布上传时记为插件拥有者(这样它照常出现在拥有者的「我的上传」里)。</summary>
     public required string UploadedBySubject { get; set; }
+
+    /// <summary>
+    /// 经可信发布上传时的来源,如 <c>github:acme/plugins/.github/workflows/release.yml@refs/tags/v1.2.0 run 123</c>;
+    /// 登录后手动上传时为空。审核与追溯「这个包是哪次 CI 交进来的」用。
+    /// </summary>
+    public string? PublishedVia { get; set; }
 
     /// <summary>上传时间(UTC)。</summary>
     public DateTime UploadedAt { get; set; } = DateTime.UtcNow;

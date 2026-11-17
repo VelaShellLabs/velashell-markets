@@ -188,6 +188,11 @@ services:
       # 审核员的 sub(就是认证服务首页显示的那串)。留空则审核台没人进得去 ——
       # 那时"需人工复核"的包会一直停在隔离区,这是安全的默认。
       - Auth__ModeratorSubjects__0=${MODERATOR_SUBJECT:-}
+      # 可信发布:插件仓库的 GitHub Actions 凭 OIDC 令牌直接推新版本(docs/api.md「可信发布」)。
+      # 默认关;开了之后 API 要能出网访问 token.actions.githubusercontent.com 与 api.github.com。
+      - GitHubOidc__Enabled=${TRUSTED_PUBLISHING:-false}
+      - GitHubOidc__Audience=${TRUSTED_PUBLISHING_AUDIENCE:-velashell-market}
+      - GitHubOidc__ApiToken=${TRUSTED_PUBLISHING_GITHUB_TOKEN:-}
     ports:
       - "8080:8080"
     extra_hosts:
